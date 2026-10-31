@@ -1,0 +1,30 @@
+{
+  "name": "com.gulkonster.waxkit",
+  "version": "0.1.0",
+  "displayName": "Unity WAX Kit",
+  "description": "WAX wallet login (Anchor, My Cloud Wallet), transactions and table reads for Unity games. WebGL for now.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "documentationUrl": "https://github.com/gulkonster/unity-wax-kit#readme",
+  "changelogUrl": "https://github.com/gulkonster/unity-wax-kit/blob/main/Packages/com.gulkonster.waxkit/CHANGELOG.md",
+  "licensesUrl": "https://github.com/gulkonster/unity-wax-kit/blob/main/LICENSE",
+  "author": {
+    "name": "gulkonster",
+    "url": "https://github.com/gulkonster/unity-wax-kit"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.ugui": "2.0.0"
+  },
+  "keywords": [
+    "wax",
+    "eosio",
+    "antelope",
+    "blockchain",
+    "wallet",
+    "anchor",
+    "mycloudwallet",
+    "webgl",
+    "nft"
+  ]
+}

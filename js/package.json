@@ -1,0 +1,19 @@
+{
+  "name": "unity-wax-kit-js",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WharfKit bridge bundled into the Unity WAX Kit WebGL plugin",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@wharfkit/session": "^1.2.0",
+    "@wharfkit/wallet-plugin-anchor": "^1.0.4",
+    "@wharfkit/wallet-plugin-cloudwallet": "^1.0.3",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
