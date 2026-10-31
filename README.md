@@ -7,6 +7,8 @@
 
 WAX blockchain wallets for Unity games: log in with **Anchor** or **My Cloud Wallet**, send transactions, and read contract tables from C#. The wallet always signs, so the kit never handles private keys. In WebGL builds it uses [WharfKit](https://wharfkit.com) underneath.
 
+> **Use at your own risk. Not audited. Test on testnet first.**
+
 ## Install
 
 Unity 6.0 or newer (built and tested against Unity 6.4 / 6000.4.5f1).
@@ -65,6 +67,14 @@ The kit draws the wallet steps in the game, never as an HTML overlay. `WaxKit.UI
 - **Error**: message, **Close**
 
 By default this is `WaxDefaultUI`. It builds its own overlay canvas (sorting order 32000) in code, stays inside the screen's safe area, and works in portrait and landscape. It never touches your canvases.
+
+`WaxKit.Theme` sets its colors and font. The default is `WaxUiTheme.Dark`; `WaxUiTheme.Light` is the other preset, or you can make your own theme with your colors and an optional TextMeshPro font. A new theme applies at once, even while the UI is open. The QR code always stays black on white.
+
+```csharp
+var theme = WaxUiTheme.Light;          // each preset call returns a new copy
+theme.Primary = new Color(0.9f, 0.5f, 0.1f);
+WaxKit.Theme = theme;
+```
 
 To use your own look, implement `IWaxWalletUI` and set it before logging in:
 

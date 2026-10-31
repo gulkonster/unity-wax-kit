@@ -26,6 +26,10 @@ namespace Gulkonster.WaxKit.Editor
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            // The minimal project has no audio module, so a listener only causes a warning.
+            AudioListener listener;
+            while ((listener = Object.FindAnyObjectByType<AudioListener>()) != null)
+                Object.DestroyImmediate(listener);
             new GameObject(DemoTypeName, demoType);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));

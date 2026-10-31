@@ -19,13 +19,8 @@ namespace Gulkonster.WaxKit
         // Room for everything but the QR, so the panel fits a landscape screen.
         const float ReservedHeight = 620;
 
-        static readonly Color Dim = new Color(0, 0, 0, 0.6f);
-        static readonly Color PanelColor = new Color(0.97f, 0.97f, 0.98f);
-        static readonly Color PrimaryColor = new Color(0.22f, 0.4f, 0.85f);
-        static readonly Color SecondaryColor = new Color(0.86f, 0.87f, 0.9f);
-        static readonly Color TextColor = new Color(0.1f, 0.1f, 0.12f);
-
         CanvasScaler scaler;
+        Image dim;
         RectTransform safeArea;
         RectTransform panel;
         TMP_Text title;
@@ -36,6 +31,7 @@ namespace Gulkonster.WaxKit
         Button primary;
         TMP_Text primaryLabel;
         WaxGestureButton primaryGesture;
+        Button secondary;
         TMP_Text secondaryLabel;
 
         WaxUiRequest request;
@@ -107,6 +103,24 @@ namespace Gulkonster.WaxKit
             }
         }
 
+        /// <summary>Recolors the built UI; <see cref="WaxKit.Theme"/> calls this when it changes.</summary>
+        internal void ApplyTheme(WaxUiTheme theme)
+        {
+            dim.color = theme.Dim;
+            panel.GetComponent<Image>().color = theme.Panel;
+            primary.GetComponent<Image>().color = theme.Primary;
+            secondary.GetComponent<Image>().color = theme.Secondary;
+
+            var font = theme.Font != null ? theme.Font : TMP_Settings.instance != null ? TMP_Settings.defaultFontAsset : null;
+            foreach (var text in panel.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (font != null) text.font = font;
+                text.color = theme.Text;
+            }
+            primaryLabel.color = theme.PrimaryText;
+            secondaryLabel.color = theme.SecondaryText;
+        }
+
         void ClearQr()
         {
             if (qrImage.texture != null) Destroy(qrImage.texture);
@@ -136,16 +150,15 @@ namespace Gulkonster.WaxKit
             scaler.matchWidthOrHeight = 0.5f;
             gameObject.AddComponent<GraphicRaycaster>();
 
-            var dim = NewChild("Dim", transform, typeof(Image));
-            Stretch(dim);
-            dim.GetComponent<Image>().color = Dim;
+            var dimRect = NewChild("Dim", transform, typeof(Image));
+            Stretch(dimRect);
+            dim = dimRect.GetComponent<Image>();
 
             safeArea = NewChild("SafeArea", transform);
             Stretch(safeArea);
 
             panel = NewChild("Panel", safeArea, typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
-            panel.GetComponent<Image>().color = PanelColor;
             var layout = panel.GetComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset((int)Padding, (int)Padding, (int)Padding, (int)Padding);
             layout.spacing = Spacing;
@@ -167,11 +180,14 @@ namespace Gulkonster.WaxKit
             body = AddText(34, FontStyles.Normal);
             countdown = AddText(30, FontStyles.Italic);
 
-            primary = AddButton("Primary", PrimaryColor, Color.white, out primaryLabel);
+            primary = AddButton("Primary", out primaryLabel);
             // Continue / Open Anchor run only through the gesture, inside the browser's pointerup.
             primaryGesture = primary.gameObject.AddComponent<WaxGestureButton>();
 
-            AddButton("Secondary", SecondaryColor, TextColor, out secondaryLabel).onClick.AddListener(OnSecondary);
+            secondary = AddButton("Secondary", out secondaryLabel);
+            secondary.onClick.AddListener(OnSecondary);
+
+            ApplyTheme(WaxKit.Theme);
         }
 
         TMP_Text AddText(float size, FontStyles style)
@@ -179,22 +195,19 @@ namespace Gulkonster.WaxKit
             var text = NewChild("Text", panel, typeof(TextMeshProUGUI)).GetComponent<TextMeshProUGUI>();
             text.fontSize = size;
             text.fontStyle = style;
-            text.color = TextColor;
             text.alignment = TextAlignmentOptions.Center;
             text.textWrappingMode = TextWrappingModes.Normal;
             return text;
         }
 
-        Button AddButton(string name, Color color, Color textColor, out TMP_Text label)
+        Button AddButton(string name, out TMP_Text label)
         {
             var rect = NewChild(name, panel, typeof(Image), typeof(Button), typeof(LayoutElement));
-            rect.GetComponent<Image>().color = color;
             rect.GetComponent<LayoutElement>().minHeight = ButtonHeight;
 
             label = NewChild("Label", rect, typeof(TextMeshProUGUI)).GetComponent<TextMeshProUGUI>();
             Stretch((RectTransform)label.transform);
             label.fontSize = 38;
-            label.color = textColor;
             label.alignment = TextAlignmentOptions.Center;
             return rect.GetComponent<Button>();
         }

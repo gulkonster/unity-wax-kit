@@ -10,6 +10,7 @@ namespace Gulkonster.WaxKit
     {
         static IWalletProvider provider;
         static IWaxWalletUI ui;
+        static WaxUiTheme theme = WaxUiTheme.Dark;
 
         public static WaxNetwork Network { get; private set; }
         public static string AppName { get; private set; }
@@ -21,6 +22,17 @@ namespace Gulkonster.WaxKit
         {
             get => ui ??= WaxDefaultUI.Create();
             set => ui = value ?? throw new ArgumentNullException(nameof(value), "WaxKit.UI cannot be null.");
+        }
+
+        /// <summary>Colors and font of <see cref="WaxDefaultUI"/> (Dark by default). A custom <see cref="UI"/> ignores it.</summary>
+        public static WaxUiTheme Theme
+        {
+            get => theme;
+            set
+            {
+                theme = value ?? throw new ArgumentNullException(nameof(value), "WaxKit.Theme cannot be null.");
+                if (ui is WaxDefaultUI defaultUI) defaultUI.ApplyTheme(theme);
+            }
         }
 
         /// <summary>Selects the network. Calling it again switches networks and forgets the current session.</summary>
