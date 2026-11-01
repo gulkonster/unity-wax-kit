@@ -13,6 +13,7 @@
 *.jpg  binary
 *.ttf  binary
 *.otf  binary
+*.dll  binary
 
-# Generated bundle
-*.jspre linguist-generated=true
+# GitHub language stats: TextMesh Pro shaders are Unity's, not the kit's (the kit is C#)
+Assets/TextMesh[[:space:]]Pro/** linguist-vendored

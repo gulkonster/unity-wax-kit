@@ -13,9 +13,6 @@
 .vs/
 .idea/
 
-# Node
-node_modules/
-
 # Secrets
 .env
 .env.*

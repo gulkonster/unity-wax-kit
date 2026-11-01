@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Gulkonster.WaxKit;
 using Newtonsoft.Json.Linq;
@@ -10,13 +11,15 @@ using UnityEngine.UI;
 /// <summary>Unity WAX Kit demo. Builds its own uGUI so the scene needs nothing else.</summary>
 public class WaxKitDemo : MonoBehaviour
 {
-    const string AppName = "Unity WAX Kit Demo";
+    // Wallets show the app name as an account-style name: up to 12 characters, a-z, 1-5 and dots.
+    const string AppName = "waxkitdemo";
     const string Memo = "";
 
     static readonly WaxNetwork[] Networks = { WaxNetwork.Testnet, WaxNetwork.Mainnet };
 
     readonly DefaultControls.Resources resources = new DefaultControls.Resources();
     InputField toInput;
+    Button myCloudWalletButton;
     Text sessionText;
     Text statusText;
 
@@ -26,6 +29,8 @@ public class WaxKitDemo : MonoBehaviour
         WaxKit.Initialize(Networks[0], AppName);
         ShowSession();
         SetStatus("Ready.");
+        // Picks up the saved session, or finishes a login the player approved while the game was closed.
+        Restore();
     }
 
     // ---- Actions ----
@@ -84,6 +89,15 @@ public class WaxKitDemo : MonoBehaviour
         return $"Balance of {WaxKit.Current.Actor}: {balance}";
     });
 
+    void ReadNfts() => Run("Reading NFTs...", async () =>
+    {
+        if (!WaxKit.IsLoggedIn) return "Log in first.";
+
+        var assets = await WaxKit.AtomicAssets.GetAssets(new WaxAtomicQuery { Owner = WaxKit.Current.Actor, Limit = 5, Sort = "asset_id", Order = "desc" });
+        if (assets.Count == 0) return $"{WaxKit.Current.Actor} has no NFTs on {WaxKit.Network.Name}.";
+        return "NFTs: " + string.Join(", ", assets.Select(a => $"{a.Name ?? a.AssetId} ({a.Collection?.CollectionName})"));
+    });
+
     async void Run(string busyText, Func<Task<string>> action)
     {
         SetStatus(busyText);
@@ -104,6 +118,10 @@ public class WaxKitDemo : MonoBehaviour
 
     void ShowSession()
     {
+        // Only offer wallets that work on this network (My Cloud Wallet: WAX mainnet only).
+        var myCloudWallet = WaxKit.Wallets.FirstOrDefault(w => w.Id == "mycloudwallet");
+        myCloudWalletButton.interactable = myCloudWallet != null && myCloudWallet.SupportsChain(WaxKit.Network);
+
         sessionText.text = WaxKit.IsLoggedIn
             ? $"Session: {WaxKit.Current} on {WaxKit.Network.Name}"
             : $"Session: not logged in ({WaxKit.Network.Name})";
@@ -150,11 +168,12 @@ public class WaxKitDemo : MonoBehaviour
         dropdown.ClearOptions();
         dropdown.AddOptions(new System.Collections.Generic.List<string> { "Testnet", "Mainnet" });
         dropdown.captionText.fontSize = 24;
+        SizeDropdownList(dropdown, 24, 64);
         dropdown.onValueChanged.AddListener(OnNetworkChanged);
 
         var loginRow = AddRow(panel.transform);
         AddButton(loginRow, "Login Anchor", () => Login(WalletType.Anchor));
-        AddButton(loginRow, "Login My Cloud Wallet", () => Login(WalletType.MyCloudWallet));
+        myCloudWalletButton = AddButton(loginRow, "Login My Cloud Wallet", () => Login(WalletType.MyCloudWallet));
 
         var sessionRow = AddRow(panel.transform);
         AddButton(sessionRow, "Restore", Restore);
@@ -167,12 +186,34 @@ public class WaxKitDemo : MonoBehaviour
         foreach (var text in toInput.GetComponentsInChildren<Text>(true)) text.fontSize = 24;
         ((Text)toInput.placeholder).text = "To (WAX account)";
         toInput.characterLimit = 12;
+        KeepTypedText(toInput);
 
         var actionRow = AddRow(panel.transform);
         AddButton(actionRow, "Send 0.0001 WAX", Send);
         AddButton(actionRow, "Read balance", ReadBalance);
+        AddButton(actionRow, "Read NFTs", ReadNfts);
 
         statusText = AddText(panel.transform, "", 22, 220);
+    }
+
+    /// <summary>
+    /// Phones: edit the text inside the field itself (the player can place the cursor and select text), and keep what
+    /// was typed when the keyboard is closed without its OK key (back, a tap elsewhere). The keyboard reports that as a
+    /// cancel, and InputField would put the old text back.
+    /// </summary>
+    static void KeepTypedText(InputField input)
+    {
+        input.shouldHideMobileInput = true;
+        var typed = input.text;
+        input.onValueChanged.AddListener(value =>
+        {
+            // The put-back happens after the field lost focus; only text typed while editing counts.
+            if (input.isFocused) typed = value;
+        });
+        input.onEndEdit.AddListener(_ =>
+        {
+            if (input.wasCanceled && input.text != typed) input.SetTextWithoutNotify(typed);
+        });
     }
 
     static Transform AddRow(Transform parent)
@@ -186,7 +227,7 @@ public class WaxKitDemo : MonoBehaviour
         return row.transform;
     }
 
-    void AddButton(Transform row, string label, Action onClick)
+    Button AddButton(Transform row, string label, Action onClick)
     {
         var button = DefaultControls.CreateButton(resources).GetComponent<Button>();
         button.transform.SetParent(row, false);
@@ -194,6 +235,27 @@ public class WaxKitDemo : MonoBehaviour
         text.text = label;
         text.fontSize = 24;
         button.onClick.AddListener(() => onClick());
+        return button;
+    }
+
+    /// <summary>The default dropdown list is tiny (14 px text, 20 px rows): make its rows as big as the other controls.</summary>
+    static void SizeDropdownList(Dropdown dropdown, int fontSize, float rowHeight)
+    {
+        var template = dropdown.template;
+        var item = dropdown.itemText.transform.parent as RectTransform;
+        var content = item.parent as RectTransform;
+
+        dropdown.itemText.fontSize = fontSize;
+        item.sizeDelta = new Vector2(item.sizeDelta.x, rowHeight);
+        content.sizeDelta = new Vector2(content.sizeDelta.x, rowHeight);
+        // Room for every option without scrolling.
+        template.sizeDelta = new Vector2(template.sizeDelta.x, rowHeight * dropdown.options.Count + 8);
+
+        // The checkmark and the text indent scale with the row.
+        var checkmark = item.Find("Item Checkmark") as RectTransform;
+        if (checkmark != null) checkmark.sizeDelta = new Vector2(rowHeight * 0.6f, rowHeight * 0.6f);
+        var label = dropdown.itemText.rectTransform;
+        label.offsetMin = new Vector2(rowHeight * 0.8f, label.offsetMin.y);
     }
 
     Text AddText(Transform parent, string value, int fontSize, float height)

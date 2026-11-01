@@ -47,6 +47,7 @@ namespace Gulkonster.WaxKit
             return ui;
         }
 
+        /// <summary>Shows a wallet step over the game (the kit calls this).</summary>
         public void Show(WaxUiRequest next)
         {
             ClearQr();
@@ -62,7 +63,7 @@ namespace Gulkonster.WaxKit
 
             var showPrimary = next.Kind == WaxUiKind.Continue || (isAnchor && next.CanOpenAnchor);
             primary.gameObject.SetActive(showPrimary);
-            primaryLabel.text = isAnchor ? "Open Anchor" : "Continue";
+            primaryLabel.text = isAnchor ? $"Open {next.WalletName ?? "Anchor"}" : "Continue";
             primaryGesture.action = isAnchor ? WaxGestureAction.OpenAnchor : WaxGestureAction.Continue;
             secondaryLabel.text = next.Kind == WaxUiKind.Error ? "Close" : "Cancel";
 
@@ -71,6 +72,7 @@ namespace Gulkonster.WaxKit
             LateUpdate();
         }
 
+        /// <summary>Hides the wallet UI (the kit calls this).</summary>
         public void Close()
         {
             request = null;

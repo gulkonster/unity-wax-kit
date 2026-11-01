@@ -6,12 +6,19 @@ namespace Gulkonster.WaxKit
     /// <summary>Colors and font of <see cref="WaxDefaultUI"/>. Set it on <see cref="WaxKit.Theme"/>. The QR always stays black on white.</summary>
     public sealed class WaxUiTheme
     {
+        /// <summary>Color that darkens the game behind the wallet panel (use alpha below 1).</summary>
         public Color Dim;
+        /// <summary>Background of the wallet panel.</summary>
         public Color Panel;
+        /// <summary>Background of the main button (Open Anchor / Continue).</summary>
         public Color Primary;
+        /// <summary>Text color of the main button.</summary>
         public Color PrimaryText;
+        /// <summary>Background of the second button (Cancel / Close).</summary>
         public Color Secondary;
+        /// <summary>Text color of the second button.</summary>
         public Color SecondaryText;
+        /// <summary>Color of titles and body text.</summary>
         public Color Text;
         /// <summary>Null uses the TextMeshPro default font.</summary>
         public TMP_FontAsset Font;

@@ -1,8 +1,8 @@
 {
   "name": "com.gulkonster.waxkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Unity WAX Kit",
-  "description": "WAX wallet login (Anchor, My Cloud Wallet), transactions and table reads for Unity games. WebGL for now.",
+  "description": "WAX and Antelope wallet login (Anchor, My Cloud Wallet, pluggable wallets), transactions, table reads and AtomicAssets reads for Unity games on WebGL, Windows and Android.",
   "unity": "6000.0",
   "license": "MIT",
   "documentationUrl": "https://github.com/gulkonster/unity-wax-kit#readme",
@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "com.unity.ugui": "2.0.0"
+    "com.unity.ugui": "2.0.0",
+    "com.unity.modules.androidjni": "1.0.0"
   },
   "keywords": [
     "wax",
@@ -25,6 +26,9 @@
     "anchor",
     "mycloudwallet",
     "webgl",
+    "android",
+    "windows",
+    "atomicassets",
     "nft"
   ]
 }
