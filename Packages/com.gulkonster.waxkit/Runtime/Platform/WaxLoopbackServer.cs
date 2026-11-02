@@ -151,7 +151,6 @@ namespace Gulkonster.WaxKit.Platform
                        $"Content-Type: {response.ContentType}\r\n" +
                        $"Content-Length: {body.Length}\r\n" +
                        "Cache-Control: no-store\r\n" +
-                       "Access-Control-Allow-Origin: *\r\n" +
                        "Connection: close\r\n\r\n";
             var bytes = Encoding.ASCII.GetBytes(head);
             stream.Write(bytes, 0, bytes.Length);

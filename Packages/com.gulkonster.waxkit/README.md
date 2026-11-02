@@ -376,6 +376,8 @@ For anything else implement `IWaxWallet` (`Login`, `Restore`, `Logout`, `Sign`, 
 - **Reject in Anchor**: Anchor on phones returns to the game without telling it. When the player is back in the game without an answer for a few seconds, the request ends as `Cancelled`.
 - **My Cloud Wallet** runs in a Chrome Custom Tab over the game (a bottom sheet where the browser supports it), and the game comes back by itself when the request ends. When Chrome is installed (and enabled), the kit always opens My Cloud Wallet in Chrome, even when another browser is the phone's default: My Cloud Wallet signs with a passkey, and some default browsers (for example the own browser on many Xiaomi phones) do not support passkeys. To use the phone's default browser instead, turn off **Open My Cloud Wallet in Chrome when installed** in **Project Settings > Unity WAX Kit**. On phones without Chrome (or with that setting off), the default browser runs it (as a Custom Tab, or as a normal browser window outside the game). Such browsers may ask the player once to allow new windows (**Allow**: My Cloud Wallet opens in one) and, at the end, whether the page may open your game (**OK**); the page also shows a **Return to the game** button for that case. If the player is not yet signed in to My Cloud Wallet in that browser, the wallet page loads again after the sign-in; the kit sends the transaction again then, so the request still finishes.
 
+The kit's automated tests run in the Editor: **Window > General > Test Runner > EditMode > Run All**.
+
 ## Demo
 
 Open this repository in Unity Hub and run **Tools > Unity WAX Kit > Create Demo Scene**. It creates `Assets/WaxKitDemo/WaxKitDemo.unity` (testnet by default) with login, a 0.0001 WAX transfer, a balance read and an NFT read. It runs in the Editor and in WebGL, Windows and Android builds, and uses the Input System package.
@@ -400,6 +402,14 @@ These come from the wallets or the browser, not from the kit. Each item says wha
 - **Android, My Cloud Wallet without Chrome: signing needs passkey support.** My Cloud Wallet signs with a passkey (WebAuthn). When Chrome is installed, the kit uses it, so this only affects phones without Chrome (or games that turned that setting off). In browsers without passkey support (some phones' own browsers) login works, but signing ends as `Cancelled` with the reason "WebAuthn is not supported in this browser"; nothing reaches the chain. Why: the browser cannot use passkeys, and the wallet needs them. What to do: install or enable Chrome. Support for other browsers with passkeys (or other solutions) can be added by pull request.
 
 Found a fix for one of these? Anyone is welcome to open a pull request.
+
+## Security
+
+- The kit never sees or stores account private keys.
+- It stores in PlayerPrefs, per chain id: the session (account, permission, wallet) and, for Anchor, the link-session request key. That is a temporary key that only lets the game send requests to that Anchor session. A pending login key is deleted when the login ends, and `Logout()` deletes the saved session. On WebGL, PlayerPrefs live in browser storage, readable by any script on the same page.
+- A restored session (`RestoreSession()`) only remembers the account on this device. It is not proof of ownership for a game server: a server that needs proof must verify a signed transaction or an identity proof itself.
+- The kit checks every transaction a wallet returns before broadcasting it. My Cloud Wallet may only add a WAX fee transfer to `txfee.wam` and a RAM purchase for the player; Anchor may not change anything. The kit also checks the chain id of RPC answers and wallet callbacks.
+- Report security problems privately with the **Report a vulnerability** button on the repository's **Security** tab, not in public issues.
 
 ## License
 

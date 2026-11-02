@@ -21,9 +21,18 @@ namespace Gulkonster.WaxKit.Chain
         /// <summary>/v1/chain/get_table_rows: the raw JSON answer.</summary>
         public static Task<string> GetTableRows(WaxNetwork network, string queryJson) => PostText(network, "/v1/chain/get_table_rows", queryJson);
 
-        /// <summary>/v1/chain/get_info: head block, chain id and time.</summary>
-        public static async Task<JObject> GetInfo(WaxNetwork network, CancellationToken cancellation = default) =>
-            WaxJson.Parse(await PostText(network, "/v1/chain/get_info", "{}", cancellation));
+        /// <summary>/v1/chain/get_info: head block, chain id and time. Throws WrongChain when the endpoint is on another chain.</summary>
+        public static async Task<JObject> GetInfo(WaxNetwork network, CancellationToken cancellation = default)
+        {
+            const string path = "/v1/chain/get_info";
+            var response = await network.Rpc.Send("POST", path, "{}", cancellation, IsNodeosError);
+            if (!response.IsSuccess) throw new WaxKitException(WaxErrorKind.Network, $"{path}: {NodeosError(response).message}");
+
+            var info = WaxJson.Parse(response.Text);
+            if (!string.Equals((string)info["chain_id"], network.ChainId, StringComparison.OrdinalIgnoreCase))
+                throw new WaxKitException(WaxErrorKind.WrongChain, $"{response.Endpoint} is on another chain, not {network.Name}.");
+            return info;
+        }
 
         /// <summary>/v1/chain/get_account: permissions and keys of an account.</summary>
         public static async Task<JObject> GetAccount(WaxNetwork network, string account, CancellationToken cancellation = default) =>
@@ -120,7 +129,28 @@ namespace Gulkonster.WaxKit.Chain
             var error = NodeosError(response);
             // Accepted earlier through an endpoint that timed out.
             if (error.name == "tx_duplicate") return id;
+            // A contract may have changed while the game runs: read its ABI again on the next try.
+            ForgetAbis(network, packed);
             throw new WaxKitException(WaxErrorKind.Wallet, $"The chain rejected the transaction: {error.message}");
+        }
+
+        /// <summary>Removes the cached ABIs of the contracts a packed transaction calls.</summary>
+        internal static void ForgetAbis(WaxNetwork network, byte[] packed)
+        {
+            JObject transaction;
+            try
+            {
+                transaction = AntelopeTransaction.Decode(packed);
+            }
+            catch (FormatException)
+            {
+                return;
+            }
+            lock (AbiCache)
+            {
+                foreach (var action in ((JArray)transaction["actions"]).Concat((JArray)transaction["context_free_actions"]))
+                    AbiCache.Remove(network.ChainId + ":" + (string)action["account"]);
+            }
         }
 
         /// <summary>POSTs to a chain API path through the endpoint list (failover) and returns the answer text.</summary>

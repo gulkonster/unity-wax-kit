@@ -26,7 +26,7 @@ namespace Gulkonster.WaxKit
     /// </code></example>
     public static class WaxKit
     {
-        internal const string Version = "0.2.0";
+        internal const string Version = "0.2.1";
         const string SessionKeyPrefix = "waxkit.session.";
 
         static readonly Dictionary<string, IWaxWallet> wallets = new Dictionary<string, IWaxWallet>();
@@ -34,6 +34,8 @@ namespace Gulkonster.WaxKit
         static WaxUiTheme theme = WaxUiTheme.Dark;
         static IWaxWallet currentWallet;
         static WaxWalletSession currentWalletSession;
+        // Increased by Initialize and Logout: a login or restore that started before keeps its result to itself.
+        static int generation;
 
         static WaxKit()
         {
@@ -116,6 +118,7 @@ namespace Gulkonster.WaxKit
             Current = null;
             currentWallet = null;
             currentWalletSession = null;
+            generation++;
         }
 
         /// <summary>Adds a wallet (or replaces the one with the same id), so <see cref="Login(string)"/> can use it.</summary>
@@ -148,8 +151,12 @@ namespace Gulkonster.WaxKit
                         ? $"My Cloud Wallet works on WAX mainnet only (current network: {Network.Name})."
                         : $"{wallet.Name} does not support the network {Network.Name}.");
 
-            var context = new WaxWalletContext(Network, AppName, UI);
+            var network = Network;
+            var started = generation;
+            var context = new WaxWalletContext(network, AppName, UI);
             var walletSession = await Run(context, () => wallet.Login(context));
+            if (generation != started || Network != network)
+                throw new WaxKitException(WaxErrorKind.Cancelled, "The login was replaced by a logout or a network change.");
             SetSession(wallet, walletSession);
             Save();
             return Current;
@@ -164,6 +171,7 @@ namespace Gulkonster.WaxKit
         {
             EnsureInitialized();
             var network = Network;
+            var started = generation;
             var key = SessionKeyPrefix + network.ChainId;
             var saved = WaxPlatform.Current.Load(key);
             if (string.IsNullOrEmpty(saved)) return await ResumePendingLogin(network);
@@ -194,8 +202,8 @@ namespace Gulkonster.WaxKit
                 return null;
             }
 
-            // The game may have switched networks while this ran.
-            if (Network != network) return null;
+            // The game may have logged out or switched networks while this ran.
+            if (generation != started || Network != network) return null;
             SetSession(wallet, walletSession);
             return Current;
         }
@@ -203,10 +211,12 @@ namespace Gulkonster.WaxKit
         /// <summary>A login that was waiting for the wallet when the game was stopped; waits at most a few seconds.</summary>
         static async Task<WaxSession> ResumePendingLogin(WaxNetwork network)
         {
+            var started = generation;
             foreach (var wallet in wallets.Values.OfType<WaxEsrWallet>())
             {
                 var walletSession = await wallet.ResumeLogin(new WaxWalletContext(network, AppName, UI), TimeSpan.FromSeconds(10));
-                if (walletSession == null || Network != network) continue;
+                if (generation != started || Network != network) return null;
+                if (walletSession == null) continue;
                 SetSession(wallet, walletSession);
                 Save();
                 return Current;
@@ -223,6 +233,7 @@ namespace Gulkonster.WaxKit
             Current = null;
             currentWallet = null;
             currentWalletSession = null;
+            generation++;
             WaxPlatform.Current.Delete(SessionKeyPrefix + Network.ChainId);
 
             if (wallet != null) await wallet.Logout(new WaxWalletContext(Network, AppName, UI), walletSession);

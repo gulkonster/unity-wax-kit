@@ -86,13 +86,14 @@ namespace Gulkonster.WaxKit
         public WaxNetwork(string name, string chainId, IEnumerable<string> rpcEndpoints,
             string coreSymbol = null, int corePrecision = -1, IEnumerable<string> atomicEndpoints = null)
         {
-            if (string.IsNullOrEmpty(chainId) || chainId.Length != 64) throw new ArgumentException("Chain id must be 64 hex characters.", nameof(chainId));
+            if (string.IsNullOrEmpty(chainId) || chainId.Length != 64 || !chainId.All(Uri.IsHexDigit))
+                throw new ArgumentException("Chain id must be 64 hex characters.", nameof(chainId));
 
             Name = string.IsNullOrEmpty(name) ? chainId.Substring(0, 8) : name;
             ChainId = chainId.ToLowerInvariant();
-            RpcEndpoints = Copy(rpcEndpoints);
+            RpcEndpoints = Copy(rpcEndpoints, nameof(rpcEndpoints));
             if (RpcEndpoints.Count == 0) throw new ArgumentException("At least one RPC endpoint is required.", nameof(rpcEndpoints));
-            AtomicEndpoints = Copy(atomicEndpoints);
+            AtomicEndpoints = Copy(atomicEndpoints, nameof(atomicEndpoints));
             CoreSymbol = coreSymbol;
             CorePrecision = coreSymbol == null ? -1 : corePrecision;
 
@@ -111,7 +112,15 @@ namespace Gulkonster.WaxKit
         /// <summary>The network name.</summary>
         public override string ToString() => Name;
 
-        static IReadOnlyList<string> Copy(IEnumerable<string> urls) =>
-            Array.AsReadOnly((urls ?? Enumerable.Empty<string>()).Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => u.Trim()).ToArray());
+        static IReadOnlyList<string> Copy(IEnumerable<string> urls, string parameter)
+        {
+            var copy = (urls ?? Enumerable.Empty<string>()).Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => u.Trim()).ToArray();
+            foreach (var url in copy)
+            {
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                    throw new ArgumentException($"Endpoint '{url}' must be an absolute http or https URL.", parameter);
+            }
+            return Array.AsReadOnly(copy);
+        }
     }
 }

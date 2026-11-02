@@ -249,9 +249,24 @@ namespace Gulkonster.WaxKit
             var signatures = ResolvedSigningRequest.Signatures(payload);
             if (signatures.Count == 0) throw new WaxKitException(WaxErrorKind.Wallet, "The request was not completed.");
 
-            var resolved = ResolvedSigningRequest.FromPayload(payload);
-            var changed = !resolved.SerializedTransaction.SequenceEqual(request.SerializedTransaction);
-            return new WaxSignResult(signatures, changed ? resolved.SerializedTransaction : null);
+            var chainId = (string)payload["cid"];
+            if (!string.Equals(chainId, request.ChainId, StringComparison.OrdinalIgnoreCase))
+                throw new WaxKitException(WaxErrorKind.WrongChain, $"{Name} answered for chain {chainId ?? "(none)"}, not {request.ChainId}.");
+
+            // The request is a full transaction with TaPoS, so the wallet must sign exactly those bytes. A different
+            // transaction is never broadcast; the kit sends its own bytes.
+            byte[] resolved;
+            try
+            {
+                resolved = ResolvedSigningRequest.FromPayload(payload).SerializedTransaction;
+            }
+            catch (Exception)
+            {
+                resolved = null;
+            }
+            if (resolved == null || !resolved.SequenceEqual(request.SerializedTransaction))
+                throw new WaxKitException(WaxErrorKind.Wallet, "The wallet returned a different transaction.");
+            return new WaxSignResult(signatures);
         }
 
         /// <summary>Checks the identity proof: the signature must come from a key of actor@permission and not be expired.</summary>

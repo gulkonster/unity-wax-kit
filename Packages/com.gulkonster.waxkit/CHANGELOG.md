@@ -3,6 +3,21 @@
 All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-11-02
+
+### Security
+- My Cloud Wallet: the transaction the wallet returns is checked more strictly. The original actions must all be there, unchanged and in the same order, each once. Added actions that use the player's authority are allowed only as one WAX fee transfer to `txfee.wam` (positive `8,WAX` amount, memo "WAX fee for…") and one RAM purchase paid by and for the player, both signed with the session's permission. A changed `delay_sec` or context-free actions are rejected, and so is a returned transaction that is not a valid list of bytes.
+- Anchor and other ESR wallets: the wallet's answer must be for the network's chain id and for exactly the transaction the kit sent; otherwise nothing is broadcast. The kit always broadcasts its own transaction.
+- RPC: an endpoint whose `get_info` answers with another chain id is rejected (`WrongChain`), so no transaction is built from it.
+- `WaxNetwork`: the chain id must be 64 hexadecimal characters, and endpoints must be absolute `http` / `https` URLs.
+- Windows and Android: the local My Cloud Wallet bridge page no longer sends `Access-Control-Allow-Origin: *`.
+- `README.md` has a Security section, and `SECURITY.md` explains how to report a problem privately.
+- EditMode tests for these checks (**Window > General > Test Runner > EditMode > Run All**).
+
+### Fixed
+- A login or session restore that finished after `Logout()` or a new `Initialize()` no longer sets or saves the old session: `Login` throws `Cancelled`, `RestoreSession` returns null.
+- After the chain rejects a transaction, the ABIs of its contracts are read again on the next try (a contract updated while the game runs).
+
 ## [0.2.0] - 2026-11-01
 
 ### Added

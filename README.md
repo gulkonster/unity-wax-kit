@@ -410,6 +410,16 @@ Found a fix for one of these? Anyone is welcome to open a pull request.
 
 See [CHANGELOG.md](Packages/com.gulkonster.waxkit/CHANGELOG.md).
 
+The kit's automated tests run in the Editor: **Window > General > Test Runner > EditMode > Run All**.
+
+## Security
+
+- The kit never sees or stores account private keys.
+- It stores in PlayerPrefs, per chain id: the session (account, permission, wallet) and, for Anchor, the link-session request key. That is a temporary key that only lets the game send requests to that Anchor session. A pending login key is deleted when the login ends, and `Logout()` deletes the saved session. On WebGL, PlayerPrefs live in browser storage, readable by any script on the same page.
+- A restored session (`RestoreSession()`) only remembers the account on this device. It is not proof of ownership for a game server: a server that needs proof must verify a signed transaction or an identity proof itself.
+- The kit checks every transaction a wallet returns before broadcasting it. My Cloud Wallet may only add a WAX fee transfer to `txfee.wam` and a RAM purchase for the player; Anchor may not change anything. The kit also checks the chain id of RPC answers and wallet callbacks.
+- Report security problems privately with the **Report a vulnerability** button on the repository's **Security** tab, not in public issues.
+
 ## License
 
 MIT. The kit ships BouncyCastle, adds AndroidX Browser to Android builds, and contains C# ports of parts of WharfKit, Greymass buoy, elliptic, hmac-drbg and qrcode-generator. **Games that ship the kit must include [`THIRD_PARTY_NOTICES.md`](Packages/com.gulkonster.waxkit/THIRD_PARTY_NOTICES.md)**, for example on a licenses / credits screen or as a file next to the game.

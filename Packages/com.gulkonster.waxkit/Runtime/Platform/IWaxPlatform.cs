@@ -14,6 +14,8 @@ namespace Gulkonster.WaxKit.Platform
         public string Text;
         /// <summary>Error text when the request failed.</summary>
         public string Error;
+        /// <summary>The endpoint that answered, set by an endpoint list.</summary>
+        public string Endpoint;
         /// <summary>Response headers (case-insensitive names).</summary>
         public Dictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>True for a 2xx status.</summary>

@@ -52,6 +52,7 @@ namespace Gulkonster.WaxKit.Chain
                 if (response.Status != 0 && response.Status != 429 && (response.Status < 500 || isAnswer?.Invoke(response) == true))
                 {
                     preferred = index;
+                    response.Endpoint = Urls[index];
                     return response;
                 }
                 lastError = $"{url}: {(response.Status == 0 ? response.Error : $"HTTP {response.Status} {Shorten(response.Text)}")}";

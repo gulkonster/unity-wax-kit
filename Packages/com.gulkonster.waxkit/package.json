@@ -1,6 +1,6 @@
 {
   "name": "com.gulkonster.waxkit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "displayName": "Unity WAX Kit",
   "description": "WAX and Antelope wallet login (Anchor, My Cloud Wallet, pluggable wallets), transactions, table reads and AtomicAssets reads for Unity games on WebGL, Windows and Android.",
   "unity": "6000.0",
