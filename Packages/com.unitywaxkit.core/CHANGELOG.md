@@ -13,7 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - WebAuth wallets for XPR Network: **WebAuth App** (phone app, QR or link) and **WebAuth Web** (browser wallet: WebGL popup, small window on Windows, Custom Tab on Android). WebAuth App needs `WaxKit.WebAuthRequestAccount`, the game's own XPR account.
 - `WaxKitManager` (**GameObject > Unity WAX Kit > WAX Kit Manager**): set the kit up without code: wallets, networks and endpoints, active network, app name, theme, wait times and the WebAuth request account, with checks in the Inspector. `WaxKitManager.CreateNetworks()` returns its networks.
 - `WaxKit.UnregisterWallet(walletId)` to offer fewer wallets; wait times are settable.
-- WebGL: after a compressed build the kit writes `_headers` and `.htaccess` next to `index.html`, so servers send the right headers (each can be turned off in **Project Settings > Unity WAX Kit**).
+- `WaxKit.MultipleSessions` (off by default; WAX Kit Manager: **Multiple Sessions**): keeps every account the player logged in with on a network. New API: `WaxKit.Sessions`, `WaxKit.SwitchSession(session)`, `WaxKit.RemoveSession(session)`. `Logout()` forgets only the current account. Sessions saved by 0.2.x are still read.
+- `WaxKit.AutoRestore` (on by default; WAX Kit Manager: **Auto Restore**): `Initialize` restores the saved session by itself. `RestoreSession()` called by hand gives the same answer without a second wallet call.
+- `WaxKit.SessionChanged` event: raised on the main thread whenever `WaxKit.Current` changes (login, restore, switch, logout, remove, network change).- WebGL: after a compressed build the kit writes `_headers` and `.htaccess` next to `index.html`, so servers send the right headers (each can be turned off in **Project Settings > Unity WAX Kit**).
 - Tested on Jungle 4 and XPR Testnet, next to WAX Mainnet and Testnet.
 - README: Try it (demo links), What you can do, How to… examples.
 

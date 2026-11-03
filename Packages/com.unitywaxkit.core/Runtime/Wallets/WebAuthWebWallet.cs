@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using UnityWaxKit.Antelope;
 using UnityWaxKit.Platform;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -11,7 +12,7 @@ namespace UnityWaxKit
     /// WebAuth (XPR Network) web wallet, ported from the protonWeb link of @proton/web-sdk 5.1.0: its login and signing
     /// pages run in a popup (WebGL), a small window of the player's own Chrome / Edge (Windows) or a Custom Tab (Android)
     /// and answer with postMessage, like <see cref="MyCloudWallet"/>. The login page only reports the account (no signed
-    /// proof, as in the SDK); WebAuth signs and broadcasts transactions itself.
+    /// proof, as in the SDK); WebAuth signs transactions without broadcasting, the kit checks and broadcasts them.
     /// </summary>
     internal sealed class WebAuthWebWallet : IWaxWallet
     {
@@ -49,7 +50,10 @@ namespace UnityWaxKit
         /// <summary>Nothing to clean up (the kit forgets the session).</summary>
         public Task Logout(WaxWalletContext context, WaxWalletSession session) => Task.CompletedTask;
 
-        /// <summary>Opens the signing page with the game's actions; WebAuth signs and broadcasts, the kit gets the transaction id.</summary>
+        /// <summary>
+        /// Opens the signing page with the game's actions. WebAuth signs without broadcasting (with its own expiration and
+        /// reference block); the kit checks the signer and the actions, then broadcasts it like the other wallets.
+        /// </summary>
         public async Task<WaxSignResult> Sign(WaxWalletContext context, WaxWalletSession session, WaxSignRequest request)
         {
             if (request.Actions == null) throw new WaxKitException(WaxErrorKind.NotSupported, "WebAuth web needs the transaction's actions.");
@@ -59,7 +63,7 @@ namespace UnityWaxKit
                 ["data"] = new JObject
                 {
                     ["transaction"] = new JObject { ["actions"] = request.Actions },
-                    ["params"] = new JObject { ["broadcast"] = true },
+                    ["params"] = new JObject { ["broadcast"] = false },
                 },
             };
             var response = await RunPopup(context, $"{BaseUrl(context.Network)}/auth", message,
@@ -68,12 +72,45 @@ namespace UnityWaxKit
 
             var error = response["error"];
             if (error != null && error.Type != JTokenType.Null && error.Type != JTokenType.Undefined)
-                throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth: " + ErrorText(error));
+            {
+                var text = ErrorText(error);
+                // WebAuth signs as whatever account it is logged in as: signed by another one, the chain refused the
+                // session account's authority (nothing went on chain).
+                if (WaxKit.IsUnsignedAuthority(text, session.Actor)) throw WaxKit.WrongAccount("WebAuth", null, session.Actor);
+                throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth: " + text);
+            }
 
             var data = response["data"] as JObject;
-            var id = Text(data?["transaction_id"]) ?? Text((data?["processed"] as JObject)?["id"]);
-            if (string.IsNullOrEmpty(id)) throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth did not return a transaction id.");
-            return new WaxSignResult(null, null, id);
+            // WebAuth signs as whatever account it is logged in as.
+            var signer = data?["signer"] as JObject;
+            var signerActor = Text(signer?["actor"]);
+            if (signerActor != session.Actor || Text(signer?["permission"]) != session.Permission)
+                throw WaxKit.WrongAccount("WebAuth", string.IsNullOrEmpty(signerActor) ? null : signerActor, session.Actor);
+
+            var serialized = Text(data["serializedTransaction"]);
+            var signatures = (data["signatures"] as JArray)?.Select(s => Text(s)).ToList();
+            if (string.IsNullOrEmpty(serialized) || signatures == null || signatures.Count == 0 || signatures.Any(string.IsNullOrEmpty))
+                throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth did not return a signed transaction.");
+
+            byte[] packed;
+            JObject signed;
+            try
+            {
+                packed = Hex.Decode(serialized);
+                signed = AntelopeTransaction.Decode(packed);
+            }
+            catch (Exception)
+            {
+                throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth returned an unreadable transaction.");
+            }
+
+            // WebAuth sets its own expiration and reference block; everything else must be the game's transaction.
+            var original = AntelopeTransaction.Decode(request.SerializedTransaction);
+            if (!JToken.DeepEquals(original["actions"], signed["actions"])
+                || (signed["context_free_actions"] as JArray)?.Count > 0 || (signed["transaction_extensions"] as JArray)?.Count > 0)
+                throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth changed the transaction.");
+
+            return new WaxSignResult(signatures, packed);
         }
 
         /// <summary>Opens the page (inside the player's Continue click where the platform needs it) and waits for its answer.</summary>

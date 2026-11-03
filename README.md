@@ -85,9 +85,18 @@ Instead of calling `WaxKit.Initialize` yourself, you can set the kit up in the I
    - **Active Network**: the entry (by name) the game starts on; default WAX Mainnet. Switch it to WAX Testnet while developing.
    - **App name** (see [App name](#app-name)).
    - **Wallets**: checkboxes **Anchor**, **My Cloud Wallet**, **WebAuth App**, **WebAuth Web**, all on by default. A wallet you untick is removed when the scene starts (see [Choosing wallets and wait times](#choosing-wallets-and-wait-times)).
+   - **Sessions**: **Multiple Sessions** (off by default) keeps every account the player logged in with on this network, so they can switch between them; **Auto Restore** (on by default) brings the last account back by itself when the game starts. See [Restore and log out](#restore-and-log-out).
    - **Theme**: Dark (default), Light, or Custom (your own colors and font).
    - **Wait times** (see [Choosing wallets and wait times](#choosing-wallets-and-wait-times)).
    - **WebAuth Request Account** (shown while WebAuth App is ticked): your game's own XPR Network account, `WaxKit.WebAuthRequestAccount`. WebAuth App needs it (see [Log in](#log-in)).
+
+The same two session settings in code (set them before `WaxKit.Initialize`):
+
+```csharp
+WaxKit.MultipleSessions = true;   // keep several accounts per network (default: false)
+WaxKit.AutoRestore = true;        // restore the last account in Initialize (default: true)
+WaxKit.Initialize(WaxNetwork.Testnet, "mygame");
+```
 
 When the scene starts, the manager applies these values and calls `WaxKit.Initialize` with the active network, so your scripts can call `WaxKit.Login` right away. Code can still change any value later; the Inspector values are only the starting values. Help boxes in the Inspector point out a chain id that is not 64 hex characters, an endpoint that is not `https://`, a network without RPC endpoints, two networks with the same name, an active network missing from the list, and an empty app name.
 
@@ -121,6 +130,8 @@ What the player sees:
 
 After the wallet answers, the game comes back to the front by itself (see [Platform notes](#platform-notes) for what each platform allows).
 
+One wallet request at a time: a new `Login` or `Transact`, `Logout` or `Initialize` ends the one still waiting as `Cancelled`. A transaction the wallet or the kit already sent to the chain still returns its id.
+
 **WebAuth (XPR Network).** WebAuth App and WebAuth Web work on XPR Network mainnet and testnet only (`WrongChain` elsewhere). Before a WebAuth App login, set `WaxKit.WebAuthRequestAccount` (WAX Kit Manager: **WebAuth Request Account**) to your game's own XPR Network account; without it WebAuth never answers. For a WebAuth App login the kit checks that the login proof is signed by a key of the player's account, not how old the proof is (WebAuth's version 2 login proofs have no expiry).
 
 Only offer wallets that work on the current network. Every wallet can tell you:
@@ -152,6 +163,7 @@ Debug.Log($"Done: https://testnet.waxblock.io/transaction/{result.TransactionId}
 - Each action signs as the logged-in `actor@permission`. To sign with something else set `action.Authorization = new[] { new WaxPermissionLevel("mygameplayer", "active") }`.
 - After an Anchor login, transactions go straight to the Anchor app that logged in (no new QR code). On phones the Anchor app opens by itself with the request; on Windows, Anchor desktop comes in front of the game by itself.
 - The wallet panel closes as soon as the wallet answered. `Transact` itself returns a moment later, once the chain accepted the transaction (that wait is needed for the transaction id); if the chain refuses it, the panel opens again with the chain's reason.
+- One wallet request at a time: a new `Login` or `Transact`, `Logout` or `Initialize` ends the one still waiting as `Cancelled`. A transaction the wallet or the kit already sent to the chain still returns its id.
 
 ## Errors
 
@@ -198,6 +210,55 @@ await WaxKit.Logout();
 `RestoreSession()` also finishes a login the player approved while the game was closed (Android may close a game in the background). Call it when the game starts.
 
 `WaxKit.Initialize` again (for example to switch to mainnet) forgets the current session in memory; the saved session of each network stays and comes back with `RestoreSession()`.
+
+### Automatic restore and SessionChanged
+
+With `WaxKit.AutoRestore` on (the default), `Initialize` runs `RestoreSession()` by itself: the last account comes back without a login screen, at startup and after a network change. You do not have to wait for it. Listen to `WaxKit.SessionChanged` instead: it runs on the main thread every time `WaxKit.Current` changes (login, restore, switch, logout, remove, network change), with the new session or `null`.
+
+```csharp
+void Start()
+{
+    WaxKit.SessionChanged += ShowPlayer;
+    ShowPlayer(WaxKit.Current);   // the restore may already be done
+}
+
+void OnDestroy() => WaxKit.SessionChanged -= ShowPlayer;
+
+void ShowPlayer(WaxSession session)
+{
+    nameText.text = session == null ? "Not logged in" : session.Actor;
+    loginButtons.SetActive(session == null);
+}
+```
+
+Calling `await WaxKit.RestoreSession()` yourself still works with `AutoRestore` on: you get the same answer, and the wallet is not asked twice.
+
+### Several accounts on one device
+
+By default the kit keeps one account per network: a new login replaces the saved one. Turn on `WaxKit.MultipleSessions` (WAX Kit Manager: **Multiple Sessions**) to keep every account the player logged in with, for example a main account and a second one in another wallet:
+
+- `WaxKit.Login(...)` adds the account (or updates it when it is already saved) and makes it the current one. A login that fails or is cancelled changes nothing.
+- `WaxKit.Sessions` lists the saved accounts of the current network, in the order they were added.
+- `WaxKit.SwitchSession(session)` makes a saved account current, with no wallet step. If the wallet no longer accepts it, it is removed and `SwitchSession` throws `NotLoggedIn`: log in again.
+- `WaxKit.RemoveSession(session)` forgets one saved account. Removing the current one is the same as `Logout()`. Like a login, it ends a wallet request still waiting (for example a `SwitchSession`).
+- `WaxKit.Logout()` forgets only the current account. `Current` becomes `null`; the kit does not switch to another account by itself.
+
+```csharp
+// Fill an account list.
+foreach (var session in WaxKit.Sessions)
+    Debug.Log($"{session.Actor} ({session.Wallet})");
+
+// The player picked one.
+var picked = WaxKit.Sessions[0];
+await WaxKit.SwitchSession(picked);
+
+// The player wants it gone from this device.
+await WaxKit.RemoveSession(picked);
+```
+
+With `MultipleSessions` off, `Sessions` holds only the current account (or nothing), and `SwitchSession` / `RemoveSession` throw `InvalidOperationException`. Sessions saved by kit 0.2.x are still read, as a list of one.
+
+My Cloud Wallet and WebAuth Web sign as the account their web page is logged in as. If the player logged in there with another account, `Transact` ends with a `Wallet` error such as "My Cloud Wallet is logged in as B, not A. Log in again with A." My Cloud Wallet: the kit checks the signatures and sends nothing (if it cannot read a signature, it sends the transaction and the chain refuses it). WebAuth Web: the kit checks the account WebAuth signed with and sends nothing.
 
 ## Read balance, tables and NFTs
 
@@ -330,6 +391,8 @@ public sealed class MyEsrWallet : WaxEsrWallet
 ```
 
 For anything else implement `IWaxWallet` (`Login`, `Restore`, `Logout`, `Sign`, `SupportsChain`). `WaxWalletContext` gives the network, the wallet UI (`ShowSign`, `WaitForContinue`, `ShowWaiting`), `OpenLink`, `ReturnUrl`, `ReturnToGame` and the player's Cancel as a `CancellationToken`. `Sign` returns signatures (the kit broadcasts), optionally a changed transaction, or a transaction id if the wallet broadcast it itself.
+
+A wallet's `Logout` must end quickly (it should only clear its own data): the next `Login` waits until it ends.
 
 ## Choosing wallets and wait times
 
@@ -582,6 +645,7 @@ Common mistakes: showing an error for `Cancelled`; catching `Exception` instead 
 - **Anchor desktop** is opened through the `esr:` link handler it installs. For transactions after login, Anchor desktop comes in front of the game by itself, also when the game is full screen; if it does not, the kit brings its window forward after about 1.5 seconds. Then the game comes back in front.
 - **Back to Anchor.** If the player leaves Anchor desktop while a request waits there (for example with Alt+Tab, which can leave Anchor hidden behind a full-screen game), **Open Anchor** in the game brings the waiting Anchor window back in front instead of sending the request again. If Anchor has no open window (it was closed), the button sends the request to Anchor again.
 - **Run In Background.** While a wallet request waits, the kit turns `Application.runInBackground` on, so the game handles the answer and comes back to the front without the player switching back. Afterwards it puts your own value back (a game that already had it on keeps it on).
+- **WebAuth Web** shows the kit's local address (`http://127.0.0.1:<port>/`) as the app asking to sign, because that page opens WebAuth. WebAuth takes no app name or logo, so this cannot change. In WebGL it shows your game's site address.
 - **My Cloud Wallet** opens in a small app-style window (no tabs, no address bar) of the player's own browser, centered over the game: Chrome when installed, otherwise Edge (part of every Windows 10 / 11). Because it is their normal browser, their Google login, saved passwords and passkeys work. The player presses **Continue** in that window once (browsers only open the wallet popup after a click). My Cloud Wallet then opens exactly over it, at the same place and size, so the player sees one small window. (A browser that is already running ignores the window size the kit asks for, and the size a page asks for its popup; so the kit moves both windows to the wallet size itself, about 560 x 860, smaller on small screens.) Further windows My Cloud Wallet opens by itself, such as its **Secure Vault**, open where the wallet puts them. The window closes by itself when the request ends (done, Cancel in the game, timeout); closing it by hand ends the request as `Cancelled`. The page talks to the game over `127.0.0.1` only. It is marked as English and "do not translate", so Chrome does not offer to translate it; Chrome may still offer that on the My Cloud Wallet pages (they belong to the wallet), and the player can close the offer or choose "Never translate English" once. Without Chrome and Edge, the default browser opens instead and the player switches back by hand.
 
 ### Android
@@ -599,7 +663,7 @@ Open this repository in Unity Hub, open `Assets/WaxKitDemo/WaxKitDemo.unity` and
 ## Current limits
 
 - **My Cloud Wallet works on WAX mainnet only** (`WrongChain` elsewhere).
-- **WebAuth web login is not proven by a signature** (same as XPR's own SDK: the page only reports the account); transactions are signed and broadcast by WebAuth.
+- **WebAuth web login is not proven by a signature** (same as XPR's own SDK: the page only reports the account); WebAuth signs transactions, the kit checks them and broadcasts them.
 - **iOS, macOS and Linux players** are not supported yet: wallet calls throw `NotSupported` there; table and AtomicAssets reads work. (A WebGL build works in the browsers on these systems.)
 - **Android Custom Tab bottom sheet** needs a browser with partial Custom Tabs (Chrome 107+); other browsers show the page full height.
 - **WebAuth on Android does not return to the game after Reject** (WebAuth's behavior); the game shows `Cancelled` when the player comes back.
@@ -616,6 +680,8 @@ These come from the wallets or the browser, not from the kit. Each item says wha
 - **Windows, My Cloud Wallet: the window is large for a moment.** When Chrome is already running, the wallet window can open at the size of Chrome's last window for a moment, before the kit moves it to its small size. Why: a running Chrome ignores the window size the kit asks for. What to do: nothing; the window shrinks by itself (about 560 x 860).
 - **Android, Anchor: a game closed during login is not opened again.** If the game is closed while Anchor shows the login, approving in Anchor does not reopen the game. Why: Anchor on Android does not open the kit's return link; it only closes itself. What to do: call `RestoreSession()` when your game starts. When the player opens the game, it finishes the login.
 - **Android, My Cloud Wallet without Chrome: signing needs passkey support.** My Cloud Wallet signs with a passkey (WebAuthn). When Chrome is installed, the kit uses it, so this only affects phones without Chrome (or games that turned that setting off). In browsers without passkey support (some phones' own browsers) login works, but signing ends as `Cancelled` with the reason "WebAuthn is not supported in this browser"; nothing reaches the chain. Why: the browser cannot use passkeys, and the wallet needs them. What to do: install or enable Chrome. Support for other browsers with passkeys (or other solutions) can be added by pull request.
+- **Anchor, WebAuth App: a replaced request stays in the wallet app.** When a new request, `Logout` or `Initialize` replaces a request the Anchor or WebAuth app already got, the request stays open in the app until the player closes it. Why: the kit cannot close another app's request; it only ignores the late answer. What to do: tell the player to close the old request in the app.
+- **Windows without Chrome or Edge: the wallet page stays open in the browser.** The wallet page (My Cloud Wallet, WebAuth Web) then opens in the default browser, and the kit cannot close it when the request ends or is replaced. Why: only Chrome and Edge give the kit a window it controls. What to do: install Chrome or Edge, or let the player close the browser tab.
 
 Found a fix for one of these? Anyone is welcome to open a pull request.
 

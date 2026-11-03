@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityWaxKit.Antelope;
+using UnityWaxKit.Chain;
 using UnityWaxKit.Platform;
 using Newtonsoft.Json.Linq;
 
@@ -82,7 +83,37 @@ namespace UnityWaxKit
                     session.Actor, session.Permission);
                 modified = serialized;
             }
+            await EnsureSignedBySession(context, session, modified ?? request.SerializedTransaction, signatures);
             return new WaxSignResult(signatures, modified);
+        }
+
+        /// <summary>
+        /// The wallet site signs as whatever account it is logged in as, which can be another account than the session's
+        /// (the player switched accounts there). The chain must accept the signatures for the transaction's authorizations;
+        /// otherwise nothing is broadcast and the player is told to log in again.
+        /// </summary>
+        static async Task EnsureSignedBySession(WaxWalletContext context, WaxWalletSession session, byte[] packed, List<string> signatures)
+        {
+            var digest = AntelopeTransaction.SigningDigest(context.Network.ChainId, packed);
+            var keys = new List<string>();
+            foreach (var text in signatures)
+            {
+                try
+                {
+                    keys.Add(Signature.Parse(text).RecoverDigest(digest).ToString());
+                }
+                catch (Exception)
+                {
+                    // Not a K1 signature (for example WebAuthn): the kit cannot tell its key, so it leaves the check to the
+                    // chain; Transact turns the chain's missing-authority error into the same message.
+                    return;
+                }
+            }
+            if (await WaxChainApi.KeysSatisfy(context.Network, AntelopeTransaction.Decode(packed), keys, context.Cancellation)) return;
+
+            // Name the other account when the keys point to exactly one (the wallet's own co-signing key may add another).
+            var others = (await WaxChainApi.AccountsOfKeys(context.Network, keys, context.Cancellation)).Where(a => a != session.Actor).ToList();
+            throw WaxKit.WrongAccount("My Cloud Wallet", others.Count == 1 ? others[0] : null, session.Actor);
         }
 
         /// <summary>Opens the page (inside the player's Continue click where the platform needs it) and waits for its answer.</summary>

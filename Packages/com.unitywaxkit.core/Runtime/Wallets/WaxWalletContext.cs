@@ -16,6 +16,7 @@ namespace UnityWaxKit
     {
         readonly IWaxWalletUI ui;
         readonly CancellationTokenSource cancel = new CancellationTokenSource();
+        WaxUiRequest shownRequest;
 
         /// <summary>The network of this call (<see cref="WaxKit.Network"/> when it started).</summary>
         public WaxNetwork Network { get; }
@@ -26,6 +27,15 @@ namespace UnityWaxKit
 
         /// <summary>True once this call showed a step, so a failure is shown as an error step.</summary>
         internal bool Shown { get; private set; }
+
+        /// <summary>True once a newer request, Logout or Initialize replaced this call: it shows no more steps (errors neither).</summary>
+        internal bool Replaced => ReplacedReason != null;
+
+        /// <summary>Why this call was replaced (the Cancelled message), or null.</summary>
+        internal string ReplacedReason { get; private set; }
+
+        /// <summary>True once the kit sends the transaction to the chain: a replace no longer ends the call, the chain's answer does.</summary>
+        internal bool Sending { get; set; }
 
         internal WaxWalletContext(WaxNetwork network, string appName, IWaxWalletUI ui)
         {
@@ -102,7 +112,10 @@ namespace UnityWaxKit
         /// <summary>Shows Continue and completes once <paramref name="onContinue"/> ran inside the player's click.</summary>
         public Task WaitForContinue(string title, string text, Action onContinue)
         {
+            if (Replaced) return Task.FromCanceled(Cancellation);
             var done = new TaskCompletionSource<bool>();
+            // Replaced while waiting: the panel is gone, so no click will come.
+            Cancellation.Register(() => done.TrySetCanceled());
             Show(new WaxUiRequest(WaxUiKind.Continue, title, text, 0, null, false, null, action =>
             {
                 if (action == "cancel")
@@ -137,6 +150,8 @@ namespace UnityWaxKit
 
         internal void Close()
         {
+            // Only this context's own step: the panel of a newer request (a newer Login) stays open.
+            if (WaxUiRequest.Active != shownRequest) return;
             WaxUiRequest.Active = null;
             if (Shown) ui.Close();
         }
@@ -146,9 +161,19 @@ namespace UnityWaxKit
             if (!cancel.IsCancellationRequested) cancel.Cancel();
         }
 
+        /// <summary>Something newer took over: cancels this call and closes its panel; it shows nothing after this.</summary>
+        internal void Replace(string reason)
+        {
+            ReplacedReason = reason;
+            Cancel();
+            Close();
+        }
+
         void Show(WaxUiRequest request)
         {
+            if (Replaced) return;
             Shown = true;
+            shownRequest = request;
             WaxUiRequest.Active = request;
             ui.Show(request);
         }

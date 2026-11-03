@@ -40,8 +40,19 @@ namespace UnityWaxKit
         static WaxUiTheme theme = WaxUiTheme.Dark;
         static IWaxWallet currentWallet;
         static WaxWalletSession currentWalletSession;
-        // Increased by Initialize and Logout: a login or restore that started before keeps its result to itself.
+        // The Login or Transact still waiting for its wallet, if any. One at a time: a newer one, Logout and Initialize
+        // replace it (Cancelled, panel closed, its late answer ignored).
+        static WaxWalletContext activeRequest;
+        const string ReplacedByNewer = "The request was replaced by a newer wallet request.";
+        const string ReplacedByLogout = "The request was replaced by a logout or a network change.";
+        // Increased by Initialize, Logout and a successful Login: a restore that started before keeps its result to itself.
         static int generation;
+        // The wallets' own logout calls (Logout, RemoveSession): a Login waits for them, so they cannot undo the new login.
+        static Task walletLogout = Task.CompletedTask;
+        // The RestoreSession of this generation, so AutoRestore and a RestoreSession by hand share one answer.
+        static Task<WaxSession> restoring;
+        static int restoringGeneration;
+        static WaxSession current;
 
         static TimeSpan anchorLoginTimeout = TimeSpan.FromMinutes(5);
         static TimeSpan myCloudWalletLoginTimeout = TimeSpan.FromMinutes(5);
@@ -67,8 +78,68 @@ namespace UnityWaxKit
         /// </summary>
         public static string AppName { get; private set; }
 
-        /// <summary>The logged-in session, or null.</summary>
-        public static WaxSession Current { get; private set; }
+        /// <summary>The logged-in session, or null. <see cref="SessionChanged"/> tells when it changes.</summary>
+        public static WaxSession Current
+        {
+            get => current;
+            private set
+            {
+                if (current == value) return;
+                current = value;
+                try
+                {
+                    SessionChanged?.Invoke(value);
+                }
+                catch (Exception e)
+                {
+                    LogWarning("A SessionChanged handler failed: " + e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raised whenever <see cref="Current"/> changes: login, restore (automatic or by hand), <see cref="SwitchSession"/>,
+        /// <see cref="Logout"/>, <see cref="RemoveSession"/> and a network change with <see cref="Initialize"/>. The argument is
+        /// the new session, or null when nobody is logged in. Runs on the main thread, like the kit's other callbacks: update
+        /// your UI here instead of waiting for <see cref="RestoreSession"/>.
+        /// </summary>
+        /// <example><code>
+        /// WaxKit.SessionChanged += session => nameText.text = session == null ? "Not logged in" : session.Actor;
+        /// </code></example>
+        public static event Action<WaxSession> SessionChanged;
+
+        /// <summary>
+        /// Off (default): one saved account per network; a new login replaces it. On: the kit keeps every account the player
+        /// logged in with on this network (see <see cref="Sessions"/>, <see cref="SwitchSession"/>, <see cref="RemoveSession"/>),
+        /// so players can switch between wallets and accounts without logging in again. Set it before <see cref="Initialize"/>
+        /// (WAX Kit Manager: Multiple Sessions).
+        /// </summary>
+        public static bool MultipleSessions { get; set; }
+
+        /// <summary>
+        /// On (default): <see cref="Initialize"/> runs <see cref="RestoreSession"/> by itself, so the last account is back
+        /// without a login screen; listen to <see cref="SessionChanged"/> to see it arrive. Calling RestoreSession by hand
+        /// still works and gives the same answer. Set it before <see cref="Initialize"/> (WAX Kit Manager: Auto Restore).
+        /// </summary>
+        public static bool AutoRestore { get; set; } = true;
+
+        /// <summary>
+        /// The saved accounts of the current network, in the order they were added (with <see cref="MultipleSessions"/> off:
+        /// only <see cref="Current"/>, if any). Pass one to <see cref="SwitchSession"/> or <see cref="RemoveSession"/>.
+        /// </summary>
+        public static IReadOnlyList<WaxSession> Sessions
+        {
+            get
+            {
+                EnsureInitialized();
+                if (!MultipleSessions) return Current == null ? new WaxSession[0] : new[] { Current };
+                return LoadSessions(Network, out _)
+                    .Where(e => (string)e["chainId"] == Network.ChainId)
+                    .Select(e => new WaxSession((string)e["actor"], (string)e["permission"], WalletTypeOf((string)e["wallet"]),
+                        (string)e["wallet"], Network.ChainId))
+                    .ToList();
+            }
+        }
 
         /// <summary>True when a player is logged in (<see cref="Current"/> is set).</summary>
         public static bool IsLoggedIn => Current != null;
@@ -156,7 +227,8 @@ namespace UnityWaxKit
 
         /// <summary>
         /// Selects the network and names the app. Call it once before anything else; calling it again switches networks and
-        /// forgets the current session (saved sessions stay saved per network).
+        /// forgets the current session (saved sessions stay saved per network). With <see cref="AutoRestore"/> on, it then
+        /// restores this network's saved session by itself.
         /// </summary>
         /// <param name="network">For example <see cref="WaxNetwork.Testnet"/> while developing, <see cref="WaxNetwork.Mainnet"/> when live.</param>
         /// <param name="appName">
@@ -168,6 +240,7 @@ namespace UnityWaxKit
             if (string.IsNullOrEmpty(appName)) throw new ArgumentException("App name is required.", nameof(appName));
 
             if (!WaxPlatform.IsSet) WaxPlatform.Current = WaxUnityPlatform.Create();
+            ReplaceActiveRequest(ReplacedByLogout);
             Network = network;
             AppName = appName;
 
@@ -176,10 +249,23 @@ namespace UnityWaxKit
             if (shown != appName)
                 LogWarning($"AppName \"{appName}\" is not a valid account-style name; wallets will show it as \"{shown}\". " +
                            "Use up to 12 characters: a-z, 1-5 and dots.");
-            Current = null;
             currentWallet = null;
             currentWalletSession = null;
             generation++;
+            Current = null;
+            if (AutoRestore) RunAutoRestore();
+        }
+
+        static async void RunAutoRestore()
+        {
+            try
+            {
+                await RestoreSession();
+            }
+            catch (Exception e)
+            {
+                LogWarning("Restoring the saved session failed: " + e.Message);
+            }
         }
 
         /// <summary>Adds a wallet (or replaces the one with the same id), so <see cref="Login(string)"/> can use it.</summary>
@@ -233,46 +319,60 @@ namespace UnityWaxKit
                         ? $"My Cloud Wallet works on WAX mainnet only (current network: {Network.Name})."
                         : $"{wallet.Name} does not support the network {Network.Name}.");
 
-            var network = Network;
-            var started = generation;
-            var context = new WaxWalletContext(network, AppName, UI);
-            var walletSession = await Run(context, () => wallet.Login(context));
-            if (generation != started || Network != network)
-                throw new WaxKitException(WaxErrorKind.Cancelled, "The login was replaced by a logout or a network change.");
+            var context = StartRequest();
+            WaxWalletSession walletSession;
+            try
+            {
+                walletSession = await Run(context, async () =>
+                {
+                    // Waits for a wallet logout still running (its failure is not this login's), or until this login is replaced.
+                    var replaced = new TaskCompletionSource<bool>();
+                    using (context.Cancellation.Register(() => replaced.TrySetResult(true)))
+                        await Task.WhenAny(walletLogout, replaced.Task);
+                    if (context.Replaced) throw new WaxKitException(WaxErrorKind.Cancelled, context.ReplacedReason);
+                    context.Cancellation.ThrowIfCancellationRequested();
+                    return await wallet.Login(context);
+                });
+            }
+            finally
+            {
+                EndRequest(context);
+            }
+            if (context.Replaced) throw new WaxKitException(WaxErrorKind.Cancelled, context.ReplacedReason);
+            // A RestoreSession still running must not overwrite this login's session. A failed or cancelled login
+            // changes nothing: the session it would have replaced stays.
+            generation++;
             SetSession(wallet, walletSession);
-            Save();
+            SaveCurrent();
             return Current;
         }
 
         /// <summary>
         /// The session saved by an earlier run on this network, or null (no window, no wallet step). Also finishes a login
         /// the player approved while the game was closed (Android may close the game while the player is in Anchor).
-        /// Call it at startup before offering the login buttons.
+        /// Call it at startup before offering the login buttons, or leave it to <see cref="AutoRestore"/> (on by default):
+        /// then this returns the answer of the restore already running or done, without a second wallet call.
         /// </summary>
-        public static async Task<WaxSession> RestoreSession()
+        public static Task<WaxSession> RestoreSession()
         {
             EnsureInitialized();
+            if (restoring != null && restoringGeneration == generation && !restoring.IsFaulted && !restoring.IsCanceled) return restoring;
+            restoringGeneration = generation;
+            return restoring = Restore();
+        }
+
+        static async Task<WaxSession> Restore()
+        {
             var network = Network;
             var started = generation;
-            var key = SessionKeyPrefix + network.ChainId;
-            var saved = WaxPlatform.Current.Load(key);
-            if (string.IsNullOrEmpty(saved)) return await ResumePendingLogin(network);
+            var entries = LoadSessions(network, out var index);
+            if (index < 0) return await ResumePendingLogin(network);
 
-            JObject json;
-            try
-            {
-                json = WaxJson.Parse(saved);
-            }
-            catch (Exception)
-            {
-                WaxPlatform.Current.Delete(key);
-                return null;
-            }
-
+            var json = entries[index];
             var wallet = FindWallet((string)json["wallet"]);
             if (wallet == null || (string)json["chainId"] != network.ChainId)
             {
-                WaxPlatform.Current.Delete(key);
+                RemoveSaved(network, json);
                 return null;
             }
 
@@ -280,7 +380,7 @@ namespace UnityWaxKit
             var context = new WaxWalletContext(network, AppName, UI);
             if (!await wallet.Restore(context, walletSession))
             {
-                WaxPlatform.Current.Delete(key);
+                RemoveSaved(network, json);
                 return null;
             }
 
@@ -300,25 +400,134 @@ namespace UnityWaxKit
                 if (generation != started || Network != network) return null;
                 if (walletSession == null) continue;
                 SetSession(wallet, walletSession);
-                Save();
+                SaveCurrent();
                 return Current;
             }
             return null;
         }
 
-        /// <summary>Forgets the session on this device (the saved one too). The wallet itself stays logged in.</summary>
+        /// <summary>
+        /// Forgets the current session on this device (the saved one too). The wallet itself stays logged in. With
+        /// <see cref="MultipleSessions"/> on, the other saved accounts stay, and <see cref="Current"/> becomes null (no
+        /// automatic switch to another account).
+        /// </summary>
         public static async Task Logout()
         {
             EnsureInitialized();
             var wallet = currentWallet;
             var walletSession = currentWalletSession;
-            Current = null;
+            ReplaceActiveRequest(ReplacedByLogout);
             currentWallet = null;
             currentWalletSession = null;
             generation++;
-            WaxPlatform.Current.Delete(SessionKeyPrefix + Network.ChainId);
+            var network = Network;
+            if (!MultipleSessions) WaxPlatform.Current.Delete(SessionKeyPrefix + network.ChainId);
+            else
+            {
+                // The current account, or the saved current one when it was not restored yet.
+                var entries = LoadSessions(network, out var index);
+                if (wallet != null) index = entries.FindIndex(e => IsEntryOf(e, wallet.Id, walletSession.Actor, walletSession.Permission));
+                if (index >= 0) entries.RemoveAt(index);
+                StoreSessions(network, entries, -1);
+            }
+            Current = null;
 
-            if (wallet != null) await wallet.Logout(new WaxWalletContext(Network, AppName, UI), walletSession);
+            if (wallet != null) await CallWalletLogout(wallet, walletSession);
+        }
+
+        /// <summary>
+        /// Makes a saved account (from <see cref="Sessions"/>) the current one, with no wallet step. Needs
+        /// <see cref="MultipleSessions"/> on. Like a login, it replaces a wallet request still waiting. Throws
+        /// <see cref="WaxKitException"/>: NotLoggedIn when the wallet no longer accepts the saved session (it is then removed
+        /// from <see cref="Sessions"/>; log in again), Cancelled when something newer replaced it.
+        /// </summary>
+        public static async Task<WaxSession> SwitchSession(WaxSession session)
+        {
+            EnsureInitialized();
+            EnsureMultipleSessions(nameof(SwitchSession));
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            var network = Network;
+            var entry = FindSaved(network, session) ?? throw new ArgumentException(
+                $"{session} is not a saved account of {network.Name}; pick one from WaxKit.Sessions.", nameof(session));
+
+            var wallet = FindWallet(session.WalletId);
+            var walletSession = new WaxWalletSession((string)entry["actor"], (string)entry["permission"], entry["data"] as JObject);
+            var context = StartRequest();
+            bool restored;
+            try
+            {
+                restored = wallet != null && await Run(context, () => wallet.Restore(context, walletSession));
+            }
+            finally
+            {
+                EndRequest(context);
+            }
+            if (context.Replaced) throw new WaxKitException(WaxErrorKind.Cancelled, context.ReplacedReason);
+            if (!restored)
+            {
+                RemoveSaved(network, entry);
+                throw new WaxKitException(WaxErrorKind.NotLoggedIn,
+                    $"The saved login of {session.Actor} has ended and was removed. Log in again with {session.Actor}.");
+            }
+
+            // A RestoreSession still running must not overwrite the account the player picked.
+            generation++;
+            SetSession(wallet, walletSession);
+            SaveCurrent();
+            return Current;
+        }
+
+        /// <summary>
+        /// Removes one saved account (from <see cref="Sessions"/>) and logs its wallet out, as <see cref="Logout"/> does.
+        /// Removing the current account is <see cref="Logout"/>. Needs <see cref="MultipleSessions"/> on. Like a login, it
+        /// replaces a wallet request still waiting (for example a <see cref="SwitchSession"/>). Does nothing for an account
+        /// that is not saved.
+        /// </summary>
+        public static async Task RemoveSession(WaxSession session)
+        {
+            EnsureInitialized();
+            EnsureMultipleSessions(nameof(RemoveSession));
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            if (Current != null && IsSame(Current, session))
+            {
+                await Logout();
+                return;
+            }
+
+            // A waiting SwitchSession must not save the removed account again.
+            ReplaceActiveRequest(ReplacedByNewer);
+            var network = Network;
+            var entry = FindSaved(network, session);
+            if (entry == null) return;
+            // The saved current account that a running RestoreSession is about to set.
+            if (RemoveSaved(network, entry)) generation++;
+
+            var wallet = FindWallet(session.WalletId);
+            if (wallet != null)
+                await CallWalletLogout(wallet, new WaxWalletSession((string)entry["actor"], (string)entry["permission"], entry["data"] as JObject));
+        }
+
+        /// <summary>Runs a wallet's own logout; a Login started meanwhile waits for it.</summary>
+        static Task CallWalletLogout(IWaxWallet wallet, WaxWalletSession walletSession)
+        {
+            var call = wallet.Logout(new WaxWalletContext(Network, AppName, UI), walletSession);
+            walletLogout = Task.WhenAll(walletLogout, call);
+            return call;
+        }
+
+        /// <summary>True when the chain's error says the session account's authority has no signature (another account signed).</summary>
+        internal static bool IsUnsignedAuthority(string chainError, string actor) =>
+            chainError.Contains("does not have signatures for it") && chainError.Contains($"\"{actor}\"");
+
+        /// <summary>The error for a web wallet logged in as another account (<paramref name="other"/>, or null when unknown).</summary>
+        internal static WaxKitException WrongAccount(string walletName, string other, string actor) =>
+            new WaxKitException(WaxErrorKind.Wallet, $"{walletName} is logged in as {other ?? "another account"}, not {actor}. Log in again with {actor}.");
+
+        static void EnsureMultipleSessions(string method)
+        {
+            if (!MultipleSessions)
+                throw new InvalidOperationException($"WaxKit.{method} needs WaxKit.MultipleSessions on (WAX Kit Manager: Multiple Sessions). " +
+                                                    "With it off the kit keeps one account per network.");
         }
 
         /// <summary>
@@ -339,24 +548,51 @@ namespace UnityWaxKit
             var network = Network;
             var wallet = currentWallet;
             var walletSession = currentWalletSession;
-            var context = new WaxWalletContext(network, AppName, UI);
+            var context = StartRequest();
 
-            var id = await Run(context, async () =>
+            // A newer request, Logout or Initialize made meanwhile ends the transaction before the wallet signs or the kit broadcasts.
+            void EnsureNotReplaced()
             {
-                var transaction = await WaxChainApi.BuildTransaction(network, json, context.Cancellation);
-                var packed = AntelopeTransaction.Encode(transaction);
-                var request = new WaxSignRequest(network.ChainId, packed, AntelopeTransaction.SigningDigest(network.ChainId, packed),
-                    transaction, AntelopeTime.Parse((string)transaction["expiration"]), json);
+                if (context.Replaced) throw new WaxKitException(WaxErrorKind.Cancelled, context.ReplacedReason);
+            }
 
-                var result = await wallet.Sign(context, walletSession, request);
-                // The player is done with the wallet: close its panel now instead of keeping it up while the transaction
-                // goes to the chain (a moment on a phone network). Transact still returns only once the chain accepted
-                // it, and a chain error still shows in the wallet panel.
-                context.Close();
-                if (!string.IsNullOrEmpty(result.TransactionId)) return result.TransactionId;
-                if (result.Signatures.Count == 0) throw new WaxKitException(WaxErrorKind.Wallet, $"{wallet.Name} returned no signature.");
-                return await WaxChainApi.SendTransaction(network, result.SerializedTransaction ?? packed, result.Signatures);
-            });
+            string id;
+            try
+            {
+                id = await Run(context, async () =>
+                {
+                    var transaction = await WaxChainApi.BuildTransaction(network, json, context.Cancellation);
+                    EnsureNotReplaced();
+                    var packed = AntelopeTransaction.Encode(transaction);
+                    var request = new WaxSignRequest(network.ChainId, packed, AntelopeTransaction.SigningDigest(network.ChainId, packed),
+                        transaction, AntelopeTime.Parse((string)transaction["expiration"]), json);
+
+                    var result = await wallet.Sign(context, walletSession, request);
+                    // The player is done with the wallet: close its panel now instead of keeping it up while the transaction
+                    // goes to the chain (a moment on a phone network). Transact still returns only once the chain accepted
+                    // it, and a chain error still shows in the wallet panel.
+                    context.Close();
+                    // The wallet broadcast it itself: it is on chain, so its id is the answer even if the request was replaced.
+                    if (!string.IsNullOrEmpty(result.TransactionId)) return result.TransactionId;
+                    EnsureNotReplaced();
+                    if (result.Signatures.Count == 0) throw new WaxKitException(WaxErrorKind.Wallet, $"{wallet.Name} returned no signature.");
+                    // From here a replace only closes the panel: the chain's answer (id or error) is the result.
+                    context.Sending = true;
+                    try
+                    {
+                        return await WaxChainApi.SendTransaction(network, result.SerializedTransaction ?? packed, result.Signatures);
+                    }
+                    catch (WaxKitException e) when (wallet.Id == MyCloudWalletId && IsUnsignedAuthority(e.Message, walletSession.Actor))
+                    {
+                        // My Cloud Wallet's signatures could not be checked before (not K1): its site signed as another account.
+                        throw WrongAccount(wallet.Name, null, walletSession.Actor);
+                    }
+                });
+            }
+            finally
+            {
+                EndRequest(context);
+            }
             return new WaxTransactResult(id);
         }
 
@@ -396,24 +632,119 @@ namespace UnityWaxKit
         {
             currentWallet = wallet;
             currentWalletSession = walletSession;
-            var type = wallet.Id == AnchorId ? WalletType.Anchor
-                : wallet.Id == MyCloudWalletId ? WalletType.MyCloudWallet
-                : wallet.Id == WebAuthId ? WalletType.WebAuth
-                : wallet.Id == WebAuthWebId ? WalletType.WebAuthWeb
-                : WalletType.Custom;
-            Current = new WaxSession(walletSession.Actor, walletSession.Permission, type, wallet.Id, Network.ChainId);
+            Current = new WaxSession(walletSession.Actor, walletSession.Permission, WalletTypeOf(wallet.Id), wallet.Id, Network.ChainId);
         }
 
-        // One session per chain id. Holds the wallet's link data (for Anchor the temporary request key), never account keys.
-        static void Save() =>
-            WaxPlatform.Current.Save(SessionKeyPrefix + Network.ChainId, new JObject
+        static WalletType WalletTypeOf(string walletId) =>
+            walletId == AnchorId ? WalletType.Anchor
+            : walletId == MyCloudWalletId ? WalletType.MyCloudWallet
+            : walletId == WebAuthId ? WalletType.WebAuth
+            : walletId == WebAuthWebId ? WalletType.WebAuthWeb
+            : WalletType.Custom;
+
+        // One saved entry per chain id. Each session holds the wallet's link data (for Anchor the temporary request key),
+        // never account keys. MultipleSessions off: the session itself (the 0.2.x format). On: {"sessions": [...], "current": i}.
+
+        /// <summary>The saved sessions of a network; <paramref name="current"/> is the index of the current one, or -1.</summary>
+        static List<JObject> LoadSessions(WaxNetwork network, out int current)
+        {
+            current = -1;
+            var key = SessionKeyPrefix + network.ChainId;
+            var saved = WaxPlatform.Current.Load(key);
+            if (string.IsNullOrEmpty(saved)) return new List<JObject>();
+            try
+            {
+                var json = WaxJson.Parse(saved);
+                if (!(json["sessions"] is JArray list))
+                {
+                    current = 0;
+                    return new List<JObject> { json };
+                }
+                var entries = list.OfType<JObject>().ToList();
+                var index = (int?)json["current"] ?? -1;
+                current = index >= 0 && index < entries.Count ? index : -1;
+                return entries;
+            }
+            catch (Exception)
+            {
+                WaxPlatform.Current.Delete(key);
+                return new List<JObject>();
+            }
+        }
+
+        static void StoreSessions(WaxNetwork network, List<JObject> entries, int current)
+        {
+            var key = SessionKeyPrefix + network.ChainId;
+            if (!MultipleSessions)
+            {
+                if (current >= 0) WaxPlatform.Current.Save(key, entries[current].ToString(Formatting.None));
+                else WaxPlatform.Current.Delete(key);
+            }
+            else if (entries.Count == 0) WaxPlatform.Current.Delete(key);
+            else WaxPlatform.Current.Save(key, new JObject { ["sessions"] = new JArray(entries), ["current"] = current }.ToString(Formatting.None));
+        }
+
+        /// <summary>Saves the current session: adds it to the saved ones (or updates the same account) and marks it current.</summary>
+        static void SaveCurrent()
+        {
+            var entries = MultipleSessions ? LoadSessions(Network, out _) : new List<JObject>();
+            var entry = new JObject
             {
                 ["wallet"] = currentWallet.Id,
                 ["actor"] = currentWalletSession.Actor,
                 ["permission"] = currentWalletSession.Permission,
                 ["chainId"] = Network.ChainId,
                 ["data"] = currentWalletSession.Data,
-            }.ToString(Formatting.None));
+            };
+            var index = entries.FindIndex(e => IsEntryOf(e, currentWallet.Id, currentWalletSession.Actor, currentWalletSession.Permission));
+            if (index >= 0) entries[index] = entry;
+            else
+            {
+                entries.Add(entry);
+                index = entries.Count - 1;
+            }
+            StoreSessions(Network, entries, index);
+        }
+
+        /// <summary>Removes a saved session; true when it was the saved current one.</summary>
+        static bool RemoveSaved(WaxNetwork network, JObject entry)
+        {
+            var entries = LoadSessions(network, out var current);
+            var index = entries.FindIndex(e => IsEntryOf(e, (string)entry["wallet"], (string)entry["actor"], (string)entry["permission"]));
+            if (index < 0) return false;
+            entries.RemoveAt(index);
+            StoreSessions(network, entries, current == index ? -1 : current > index ? current - 1 : current);
+            return current == index;
+        }
+
+        static JObject FindSaved(WaxNetwork network, WaxSession session) =>
+            session.ChainId != network.ChainId ? null
+            : LoadSessions(network, out _).FirstOrDefault(e => IsEntryOf(e, session.WalletId, session.Actor, session.Permission));
+
+        // A saved account is the same when account, permission and wallet are.
+        static bool IsEntryOf(JObject entry, string walletId, string actor, string permission) =>
+            (string)entry["wallet"] == walletId && (string)entry["actor"] == actor && (string)entry["permission"] == permission;
+
+        static bool IsSame(WaxSession a, WaxSession b) =>
+            a.WalletId == b.WalletId && a.Actor == b.Actor && a.Permission == b.Permission && a.ChainId == b.ChainId;
+
+        /// <summary>Starts a Login or Transact as the active request, replacing the one still waiting.</summary>
+        static WaxWalletContext StartRequest()
+        {
+            ReplaceActiveRequest(ReplacedByNewer);
+            return activeRequest = new WaxWalletContext(Network, AppName, UI);
+        }
+
+        static void ReplaceActiveRequest(string reason)
+        {
+            activeRequest?.Replace(reason);
+            activeRequest = null;
+        }
+
+        static void EndRequest(WaxWalletContext context)
+        {
+            if (activeRequest == context) activeRequest = null;
+        }
 
         /// <summary>Runs one wallet call: maps the player's Cancel to Cancelled and shows failures as an error step.</summary>
         static async Task<T> Run<T>(WaxWalletContext context, Func<Task<T>> call)
@@ -428,7 +759,12 @@ namespace UnityWaxKit
                 context.Close();
                 return result;
             }
-            catch (OperationCanceledException) when (context.Cancellation.IsCancellationRequested)
+            catch (Exception) when (context.Replaced && !context.Sending)
+            {
+                // Something newer took over; whatever panel it shows stays as it is.
+                throw new WaxKitException(WaxErrorKind.Cancelled, context.ReplacedReason);
+            }
+            catch (OperationCanceledException) when (context.Cancellation.IsCancellationRequested && !context.Sending)
             {
                 context.Close();
                 throw new WaxKitException(WaxErrorKind.Cancelled, "Cancelled by the user.");

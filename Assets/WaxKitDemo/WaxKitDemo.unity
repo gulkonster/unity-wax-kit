@@ -424,6 +424,8 @@ MonoBehaviour:
   myCloudWallet: 1
   webAuthApp: 1
   webAuthWeb: 1
+  multipleSessions: 1
+  autoRestore: 1
   theme: 0
   anchorLoginTimeoutSeconds: 300
   myCloudWalletLoginTimeoutSeconds: 300

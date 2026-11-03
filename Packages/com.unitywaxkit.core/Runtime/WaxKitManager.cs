@@ -6,7 +6,7 @@ using UnityEngine;
 namespace UnityWaxKit
 {
     /// <summary>
-    /// Sets the kit up from the Inspector, no code needed: networks, app name, theme and wait times. In <c>Awake</c> it
+    /// Sets the kit up from the Inspector, no code needed: networks, app name, wallets, sessions, theme and wait times. In <c>Awake</c> it
     /// applies them and calls <see cref="WaxKit.Initialize"/> with the active network. Add it with GameObject > Unity WAX
     /// Kit > WAX Kit Manager, one per game: it stays across scenes, and a second one removes itself with a warning. Code
     /// can still change any value afterwards (these are the starting values), and the kit works without this component too.
@@ -83,6 +83,11 @@ namespace UnityWaxKit
         [Tooltip("XPR Network's WebAuth web wallet in a browser window (XPR Network only). Off: removed with WaxKit.UnregisterWallet at start.")]
         [SerializeField] bool webAuthWeb = true;
 
+        [Tooltip("Off: one saved account per network; a new login replaces it. On: the kit keeps every account the player logged in with, so they can switch between them (WaxKit.MultipleSessions, WaxKit.Sessions, WaxKit.SwitchSession).")]
+        [SerializeField] bool multipleSessions;
+        [Tooltip("On: when the game starts (and after a network change), the last account comes back by itself, with no login screen (WaxKit.AutoRestore). Listen to WaxKit.SessionChanged to see it.")]
+        [SerializeField] bool autoRestore = true;
+
         [Tooltip("Colors of the kit's wallet panel: Dark, Light, or Custom (your own colors and font).")]
         [SerializeField] ThemeChoice theme = ThemeChoice.Dark;
         [Tooltip("Your own colors and font for the wallet panel. The QR code always stays black on white.")]
@@ -129,6 +134,8 @@ namespace UnityWaxKit
                 : theme == ThemeChoice.Custom && customTheme != null ? customTheme
                 : WaxUiTheme.Dark;
             WaxKit.WebAuthRequestAccount = string.IsNullOrWhiteSpace(webAuthRequestAccount) ? null : webAuthRequestAccount.Trim();
+            WaxKit.MultipleSessions = multipleSessions;
+            WaxKit.AutoRestore = autoRestore;
             // With Domain Reload off, a wallet removed in an earlier Play is still gone: put a checked one back.
             SetWallet(WaxKit.AnchorId, anchor);
             SetWallet(WaxKit.MyCloudWalletId, myCloudWallet);

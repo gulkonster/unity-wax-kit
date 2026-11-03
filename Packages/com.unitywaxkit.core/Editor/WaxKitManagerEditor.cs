@@ -38,6 +38,11 @@ namespace UnityWaxKit.Editor
             Field("webAuthWeb");
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Sessions", EditorStyles.boldLabel);
+            Field("multipleSessions");
+            Field("autoRestore");
+
+            EditorGUILayout.Space();
             var theme = Field("theme");
             if (theme.enumValueIndex == (int)WaxKitManager.ThemeChoice.Custom)
                 using (new EditorGUI.IndentLevelScope())

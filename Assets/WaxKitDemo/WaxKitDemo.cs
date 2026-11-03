@@ -49,6 +49,11 @@ public class WaxKitDemo : MonoBehaviour
     Button myCloudWalletButton;
     Button webAuthButton;
     Button webAuthWebButton;
+    Dropdown accountsDropdown;
+    float accountsCaptionWidth;
+    // The saved accounts in the Accounts list, and whether its first row is the "Choose an account" row.
+    List<WaxSession> shownSessions = new List<WaxSession>();
+    int accountsOffset;
     Transform captionBadge;
     Image sessionDot;
     Text sessionText;
@@ -63,20 +68,36 @@ public class WaxKitDemo : MonoBehaviour
         ShowNetwork();
         ShowSession();
         SetStatus("Ready.");
-        // Picks up the saved session, or finishes a login the player approved while the game was closed.
-        Restore();
+        // The manager has MultipleSessions and AutoRestore on: the kit restores the last account by itself (or finishes a
+        // login the player approved while the game was closed) and SessionChanged tells the demo.
+        WaxKit.SessionChanged += OnSessionChanged;
     }
+
+    void OnDestroy() => WaxKit.SessionChanged -= OnSessionChanged;
+
+    void OnSessionChanged(WaxSession session) => ShowSession();
 
     // ---- Actions ----
 
     void OnNetworkChanged(int index)
     {
+        // AutoRestore brings back this network's saved account by itself.
         WaxKit.Initialize(networks[index], WaxKit.AppName);
         ShowNetwork();
         ShowSession();
-        // Load this network's saved session, as the Restore button does.
-        Restore();
     }
+
+    void OnAccountChosen(int index)
+    {
+        if (index < accountsOffset) return;
+        var session = shownSessions[index - accountsOffset];
+        Run($"Switching to {session.Actor}...", async () =>
+        {
+            await WaxKit.SwitchSession(session);
+            return $"Switched to {session.Actor}.";
+        });
+    }
+
 
     void Login(WalletType wallet) => Run($"Logging in with {wallet}...", async () =>
     {
@@ -189,8 +210,46 @@ public class WaxKitDemo : MonoBehaviour
             ? $"Session: {WaxKit.Current} on {WaxKit.Network.Name}"
             : $"Session: not logged in ({WaxKit.Network.Name})";
         // One line: a long session line gets a smaller font instead of wrapping.
-        sessionText.fontSize = 24;
-        while (sessionText.fontSize > 12 && sessionText.preferredWidth > sessionTextWidth) sessionText.fontSize--;
+        FitOneLine(sessionText, 24, sessionTextWidth);
+        ShowAccounts();
+    }
+
+    /// <summary>One row per saved account ("account · wallet"), the current one selected.</summary>
+    void ShowAccounts()
+    {
+        shownSessions = WaxKit.Sessions.ToList();
+        var current = shownSessions.FindIndex(s => WaxKit.Current != null && s.Actor == WaxKit.Current.Actor
+            && s.Permission == WaxKit.Current.Permission && s.WalletId == WaxKit.Current.WalletId);
+        var options = shownSessions.Select(s => $"{s.Actor} · {WalletLabel(s)}").ToList();
+        // Nobody current: a first row asks to pick one, so every account row can be chosen.
+        accountsOffset = current < 0 ? 1 : 0;
+        if (current < 0) options.Insert(0, shownSessions.Count == 0 ? "No saved accounts" : "Choose an account");
+
+        accountsDropdown.ClearOptions();
+        accountsDropdown.AddOptions(options);
+        accountsDropdown.SetValueWithoutNotify(current < 0 ? 0 : current);
+        accountsDropdown.RefreshShownValue();
+        // 24 like the network dropdown; only a very long "account · wallet" gets a little smaller.
+        FitOneLine(accountsDropdown.captionText, 24, accountsCaptionWidth, 18);
+        // The list shows up to five rows; more scroll.
+        var template = accountsDropdown.template;
+        template.sizeDelta = new Vector2(template.sizeDelta.x, 64 * Math.Min(options.Count, 5));
+        accountsDropdown.interactable = shownSessions.Count > 0;
+        accountsDropdown.GetComponent<CanvasGroup>().alpha = shownSessions.Count > 0 ? 1f : 0.4f;
+    }
+
+    static string WalletLabel(WaxSession session) =>
+        session.Wallet == WalletType.Anchor ? "Anchor"
+        : session.Wallet == WalletType.MyCloudWallet ? "My Cloud Wallet"
+        : session.Wallet == WalletType.WebAuth ? "WebAuth App"
+        : session.Wallet == WalletType.WebAuthWeb ? "WebAuth Web"
+        : session.WalletId;
+
+    /// <summary>A smaller font instead of a second line when the text is wider than <paramref name="width"/>.</summary>
+    static void FitOneLine(Text text, int fontSize, float width, int minSize = 12)
+    {
+        text.fontSize = fontSize;
+        while (text.fontSize > minSize && text.preferredWidth > width) text.fontSize--;
     }
 
     static bool IsRegistered(string walletId) => WaxKit.Wallets.Any(w => w.Id == walletId);
@@ -257,6 +316,7 @@ public class WaxKitDemo : MonoBehaviour
         webAuthWebButton = AddButton(loginRow, "WebAuth Web", () => Login(WalletType.WebAuthWeb));
 
         var sessionRow = AddRow(panel.transform);
+        AddAccountsDropdown(sessionRow);
         AddButton(sessionRow, "Restore", Restore);
         AddButton(sessionRow, "Logout", Logout);
 
@@ -298,9 +358,14 @@ public class WaxKitDemo : MonoBehaviour
         AddButton(AddRow(panel.transform), "Quit", Application.Quit);
 #endif
 
-        // The panel has a fixed width: measure the room for the session line once.
+        // The panel has a fixed width: measure the room for the session line and the account name once.
         LayoutRebuilder.ForceRebuildLayoutImmediate(panelRect);
         sessionTextWidth = sessionText.rectTransform.rect.width;
+        accountsCaptionWidth = accountsDropdown.captionText.rectTransform.rect.width;
+        // The open list spans the whole session row, so long "account · wallet" rows keep a readable size.
+        var template = accountsDropdown.template;
+        var rowWidth = ((RectTransform)sessionRow).rect.width;
+        template.offsetMax = new Vector2(rowWidth - ((RectTransform)accountsDropdown.transform).rect.width, template.offsetMax.y);
     }
 
     void AddNetworkDropdown(Transform parent)
@@ -339,8 +404,39 @@ public class WaxKitDemo : MonoBehaviour
         arrow.GetComponent<Image>().enabled = false;
         Stretch(NewText(arrow, "▼", 16, MutedColor, TextAnchor.MiddleCenter).rectTransform, 0);
 
-        StyleDropdownList(dropdown, 64);
+        StyleDropdownList(dropdown, 64, true);
         dropdown.onValueChanged.AddListener(OnNetworkChanged);
+    }
+
+    /// <summary>The Accounts list: built and styled like the network dropdown, without badges.</summary>
+    void AddAccountsDropdown(Transform row)
+    {
+        var dropdownObject = DefaultControls.CreateDropdown(resources);
+        accountsDropdown = dropdownObject.GetComponent<Dropdown>();
+        // Faded as a whole while there is no saved account, like disabled buttons.
+        dropdownObject.AddComponent<CanvasGroup>();
+        // Most of the row: Restore and Logout share the rest.
+        AddToLayout(dropdownObject, row, 64).flexibleWidth = 3.2f;
+        SetPressable(accountsDropdown, Theme.Secondary);
+        accountsDropdown.ClearOptions();
+
+        var captionText = accountsDropdown.captionText;
+        captionText.fontSize = 24;
+        captionText.color = Theme.Text;
+        captionText.alignment = TextAnchor.MiddleLeft;
+        captionText.horizontalOverflow = HorizontalWrapMode.Overflow;
+        captionText.rectTransform.offsetMin = new Vector2(18, captionText.rectTransform.offsetMin.y);
+        captionText.rectTransform.offsetMax = new Vector2(-48, captionText.rectTransform.offsetMax.y);
+
+        // A muted down chevron, as on the network dropdown.
+        var arrow = (RectTransform)dropdownObject.transform.Find("Arrow");
+        arrow.sizeDelta = new Vector2(24, 24);
+        arrow.anchoredPosition = new Vector2(-28, 0);
+        arrow.GetComponent<Image>().enabled = false;
+        Stretch(NewText(arrow, "▼", 16, MutedColor, TextAnchor.MiddleCenter).rectTransform, 0);
+
+        StyleDropdownList(accountsDropdown, 64, false);
+        accountsDropdown.onValueChanged.AddListener(OnAccountChosen);
     }
 
     void AddToInput(Transform parent)
@@ -449,10 +545,11 @@ public class WaxKitDemo : MonoBehaviour
     }
 
     /// <summary>
-    /// The list: Panel-colored with rounded corners, rows as tall as the other controls, no scrollbar. Each row gets a
-    /// badge; the default checkmark becomes a Primary-tinted background on the selected row.
+    /// The list: Panel-colored with rounded corners, rows as tall as the other controls, no scrollbar. With
+    /// <paramref name="badge"/> each row gets a badge; the default checkmark becomes a Primary-tinted background on the
+    /// selected row.
     /// </summary>
-    void StyleDropdownList(Dropdown dropdown, float rowHeight)
+    void StyleDropdownList(Dropdown dropdown, float rowHeight, bool badge)
     {
         var template = dropdown.template;
         var item = dropdown.itemText.transform.parent as RectTransform;
@@ -485,8 +582,8 @@ public class WaxKitDemo : MonoBehaviour
         label.fontSize = 24;
         label.color = Theme.Text;
         label.alignment = TextAnchor.MiddleLeft;
-        label.rectTransform.offsetMin = new Vector2(64, label.rectTransform.offsetMin.y);
-        AddBadge(item);
+        label.rectTransform.offsetMin = new Vector2(badge ? 64 : 18, label.rectTransform.offsetMin.y);
+        if (badge) AddBadge(item);
     }
 
     /// <summary>

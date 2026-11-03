@@ -131,6 +131,38 @@ namespace UnityWaxKit.Chain
             throw new WaxKitException(WaxErrorKind.Wallet, $"The chain rejected the transaction: {error.message}");
         }
 
+        /// <summary>
+        /// /v1/chain/get_required_keys: true when <paramref name="keys"/> satisfy every authorization of the transaction (the
+        /// chain's own check, delegated permissions included), false when the chain says they do not.
+        /// </summary>
+        public static async Task<bool> KeysSatisfy(WaxNetwork network, JObject transaction, IEnumerable<string> keys, CancellationToken cancellation = default)
+        {
+            var body = new JObject { ["transaction"] = transaction, ["available_keys"] = new JArray(keys.ToArray()) }.ToString();
+            var response = await network.Rpc.Send("POST", "/v1/chain/get_required_keys", body, cancellation, IsNodeosError);
+            if (response.IsSuccess) return true;
+            var error = NodeosError(response);
+            // unsatisfied_authorization: the keys do not cover an authorization.
+            if (IsNodeosError(response) && (error.name ?? "").Contains("authorization")) return false;
+            throw new WaxKitException(WaxErrorKind.Network, $"/v1/chain/get_required_keys: {error.message}");
+        }
+
+        /// <summary>/v1/chain/get_accounts_by_authorizers: the accounts these keys belong to, or empty when the node cannot tell.</summary>
+        public static async Task<List<string>> AccountsOfKeys(WaxNetwork network, IEnumerable<string> keys, CancellationToken cancellation = default)
+        {
+            try
+            {
+                var body = new JObject { ["keys"] = new JArray(keys.ToArray()) }.ToString();
+                var response = await network.Rpc.Send("POST", "/v1/chain/get_accounts_by_authorizers", body, cancellation, IsNodeosError);
+                if (!response.IsSuccess) return new List<string>();
+                return ((WaxJson.Parse(response.Text)["accounts"] as JArray) ?? new JArray())
+                    .Select(a => (string)a["account_name"]).Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
+            }
+            catch (Exception e) when (!(e is OperationCanceledException))
+            {
+                return new List<string>();
+            }
+        }
+
         /// <summary>Removes the cached ABIs of the contracts a packed transaction calls.</summary>
         internal static void ForgetAbis(WaxNetwork network, byte[] packed)
         {
