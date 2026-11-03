@@ -14,6 +14,9 @@ namespace UnityWaxKit.Editor
     /// </summary>
     internal sealed class WaxKitWebGLBuild : IPostprocessBuildWithReport
     {
+        // First line of every file the kit writes; a file without it is never overwritten.
+        const string Marker = "# Written by Unity WAX Kit";
+
         // Same content as the README examples ("Building and publishing").
         const string NetlifyGzip = @"/Build/*.gz
   Content-Encoding: gzip
@@ -78,17 +81,34 @@ namespace UnityWaxKit.Editor
             }
 
             var written = new List<string>();
-            if (settings.webGLWriteNetlifyHeaders)
-            {
-                File.WriteAllText(Path.Combine(folder, "_headers"), compression == WebGLCompressionFormat.Brotli ? NetlifyBrotli : NetlifyGzip);
+            if (settings.webGLWriteNetlifyHeaders
+                && TryWrite(folder, "_headers", compression == WebGLCompressionFormat.Brotli ? NetlifyBrotli : NetlifyGzip, "Write Netlify _headers"))
                 written.Add("_headers (Netlify)");
-            }
-            if (settings.webGLWriteApacheHtaccess)
-            {
-                File.WriteAllText(Path.Combine(folder, ".htaccess"), Apache);
+            if (settings.webGLWriteApacheHtaccess && TryWrite(folder, ".htaccess", Apache, "Write Apache .htaccess"))
                 written.Add(".htaccess (Apache)");
+            if (written.Count > 0)
+                Debug.Log($"Unity WAX Kit: wrote {string.Join(" and ", written)} for {compression} compression to {folder}.");
+        }
+
+        /// <summary>
+        /// Writes the file with the kit's marker line first. A file already there without that line was not written by
+        /// the kit: it is left as it is, with a warning naming the setting that turns this file off.
+        /// </summary>
+        static bool TryWrite(string folder, string fileName, string content, string settingLabel)
+        {
+            var path = Path.Combine(folder, fileName);
+            if (File.Exists(path))
+            {
+                string firstLine;
+                using (var reader = new StreamReader(path)) firstLine = reader.ReadLine();
+                if (firstLine == null || firstLine.TrimEnd() != Marker)
+                {
+                    Debug.LogWarning($"Unity WAX Kit: {path} was not written by the kit, so it was left as it is. Turn off \"{settingLabel}\" in Project Settings > Unity WAX Kit to stop this warning.");
+                    return false;
+                }
             }
-            Debug.Log($"Unity WAX Kit: wrote {string.Join(" and ", written)} for {compression} compression to {folder}.");
+            File.WriteAllText(path, Marker + "\n" + content);
+            return true;
         }
     }
 }

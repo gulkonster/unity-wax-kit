@@ -128,12 +128,19 @@ namespace UnityWaxKit
             WaxKit.Theme = theme == ThemeChoice.Light ? WaxUiTheme.Light
                 : theme == ThemeChoice.Custom && customTheme != null ? customTheme
                 : WaxUiTheme.Dark;
-            if (!string.IsNullOrWhiteSpace(webAuthRequestAccount)) WaxKit.WebAuthRequestAccount = webAuthRequestAccount.Trim();
-            if (!anchor) WaxKit.UnregisterWallet(WaxKit.AnchorId);
-            if (!myCloudWallet) WaxKit.UnregisterWallet(WaxKit.MyCloudWalletId);
-            if (!webAuthApp) WaxKit.UnregisterWallet(WaxKit.WebAuthId);
-            if (!webAuthWeb) WaxKit.UnregisterWallet(WaxKit.WebAuthWebId);
+            WaxKit.WebAuthRequestAccount = string.IsNullOrWhiteSpace(webAuthRequestAccount) ? null : webAuthRequestAccount.Trim();
+            // With Domain Reload off, a wallet removed in an earlier Play is still gone: put a checked one back.
+            SetWallet(WaxKit.AnchorId, anchor);
+            SetWallet(WaxKit.MyCloudWalletId, myCloudWallet);
+            SetWallet(WaxKit.WebAuthId, webAuthApp);
+            SetWallet(WaxKit.WebAuthWebId, webAuthWeb);
             WaxKit.Initialize(CreateNetwork(), appName);
+        }
+
+        static void SetWallet(string walletId, bool on)
+        {
+            if (on) WaxKit.RestoreBuiltInWallet(walletId);
+            else WaxKit.UnregisterWallet(walletId);
         }
 
         /// <summary>The Networks list (the Inspector edits it).</summary>

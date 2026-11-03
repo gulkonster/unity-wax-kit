@@ -193,6 +193,7 @@ var WaxKitPlugin = {
     };
     if (webAuth) onMessage = onWebAuthMessage;
     window.addEventListener('message', onMessage);
+    state.onMessage = onMessage;
     state.timer = setInterval(function () { if (popup.closed) finish(11, ''); }, 500);
     state.finish = finish;
     WaxKit.popups[id] = state;
@@ -204,6 +205,7 @@ var WaxKitPlugin = {
     if (!state) return;
     state.done = true;
     clearInterval(state.timer);
+    window.removeEventListener('message', state.onMessage);
     try { state.popup.close(); } catch (e) {}
     delete WaxKit.popups[id];
   },

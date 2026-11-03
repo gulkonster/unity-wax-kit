@@ -197,6 +197,18 @@ namespace UnityWaxKit
         /// </summary>
         public static bool UnregisterWallet(string walletId) => walletId != null && wallets.Remove(walletId);
 
+        /// <summary>Registers the built-in wallet with this id again when no wallet has the id (WaxKitManager, Domain Reload off).</summary>
+        internal static void RestoreBuiltInWallet(string walletId)
+        {
+            if (wallets.ContainsKey(walletId)) return;
+            IWaxWallet wallet = walletId == AnchorId ? new AnchorWallet()
+                : walletId == MyCloudWalletId ? new MyCloudWallet()
+                : walletId == WebAuthId ? new WebAuthWallet()
+                : walletId == WebAuthWebId ? (IWaxWallet)new WebAuthWebWallet()
+                : null;
+            if (wallet != null) RegisterWallet(wallet);
+        }
+
         /// <summary>
         /// Asks the player to log in with a wallet and returns the session (also saved for <see cref="RestoreSession"/>).
         /// Shows the wallet steps in <see cref="UI"/>. Throws <see cref="WaxKitException"/>: Cancelled, Timeout,
