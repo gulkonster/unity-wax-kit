@@ -5,11 +5,30 @@
 [![Platforms](https://img.shields.io/badge/platforms-WebGL%20%7C%20Windows%20%7C%20Android-blue)](#platform-notes)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-WAX (and other Antelope chain) wallets for Unity games: log in with **Anchor** or **My Cloud Wallet**, send transactions, read contract tables and AtomicAssets (NFT) data from C#. The wallet always signs, so the kit never handles the player's keys. The same C# code runs on **WebGL, Windows (player and Editor) and Android**.
+WAX (and other Antelope chain) wallets for Unity games: log in with **Anchor**, **My Cloud Wallet**, **WebAuth App** or **WebAuth Web**, send transactions, read contract tables and AtomicAssets (NFT) data from C#. The wallet always signs, so the kit never handles the player's keys. The same C# code runs on **WebGL, Windows (player and Editor) and Android**.
 
 > **Use at your own risk. Not audited. Test on testnet first.**
 
-**Contents:** [Install](#install) · [Quick start](#quick-start) · [App name](#app-name) · [Log in](#log-in) · [Send a transaction](#send-a-transaction) · [Errors](#errors) · [Restore and log out](#restore-and-log-out) · [Read balance, tables and NFTs](#read-balance-tables-and-nfts) · [Networks and endpoints](#networks-and-endpoints) · [Wallet UI and theme](#wallet-ui-and-theme) · [Adding a wallet](#adding-a-wallet) · [Platform notes](#platform-notes) ([WebGL](#webgl) · [Windows](#windows) · [Android](#android)) · [Demo](#demo) · [Current limits](#current-limits) · [Known issues](#known-issues)
+## Try it
+
+- WebGL demo, compressed files with server headers (loads faster): https://unity-wax-kit-headers.netlify.app
+- WebGL demo that works on any server (decompresses in the browser, a little slower): https://unity-wax-kit-headerless.netlify.app
+- Windows exe and Android APK: on the [Releases](https://github.com/gulkonster/unity-wax-kit/releases) page.
+
+The demo opens on WAX Testnet; pick another network in its menu.
+
+## What you can do
+
+- Log in with Anchor, My Cloud Wallet, WebAuth App or WebAuth Web.
+- Send transactions, with one action or several.
+- Call your own contract's actions.
+- Read contract tables (balances, your own tables).
+- Read a player's NFTs (AtomicAssets).
+- Restore the saved session when the game starts again.
+- Switch networks (WAX Mainnet, WAX Testnet, any Antelope chain).
+- Use your own wallet UI instead of the built-in one.
+
+**Contents:** [Try it](#try-it) · [What you can do](#what-you-can-do) · [Install](#install) · [Quick start](#quick-start) · [Setup without code](#setup-without-code) · [App name](#app-name) · [Log in](#log-in) · [Send a transaction](#send-a-transaction) · [Errors](#errors) · [Restore and log out](#restore-and-log-out) · [Read balance, tables and NFTs](#read-balance-tables-and-nfts) · [Networks and endpoints](#networks-and-endpoints) · [Wallet UI and theme](#wallet-ui-and-theme) · [Adding a wallet](#adding-a-wallet) · [Choosing wallets and wait times](#choosing-wallets-and-wait-times) · [How to…](#how-to) · [Platform notes](#platform-notes) ([WebGL](#webgl) · [Windows](#windows) · [Android](#android)) · [Demo](#demo) · [Current limits](#current-limits) · [Known issues](#known-issues)
 
 ## Words used here
 
@@ -25,7 +44,7 @@ WAX (and other Antelope chain) wallets for Unity games: log in with **Anchor** o
 2. **Window > Package Manager > + > Install package from git URL…**, enter:
 
    ```
-   https://github.com/gulkonster/unity-wax-kit.git?path=/Packages/com.gulkonster.waxkit
+   https://github.com/gulkonster/unity-wax-kit.git?path=/Packages/com.unitywaxkit.core
    ```
 
 3. The package brings `com.unity.nuget.newtonsoft-json`, `com.unity.ugui` and the Android JNI module with it.
@@ -37,7 +56,7 @@ WAX (and other Antelope chain) wallets for Unity games: log in with **Anchor** o
 Put this on any GameObject in your first scene:
 
 ```csharp
-using Gulkonster.WaxKit;
+using UnityWaxKit;
 using UnityEngine;
 
 public class WalletExample : MonoBehaviour
@@ -56,6 +75,22 @@ public class WalletExample : MonoBehaviour
 
 Every kit call is `async`: call it with `await` inside an `async` method (in a MonoBehaviour, `async void Start()` or `async void OnButtonClicked()` is fine). The wallet steps (QR code, "Open Anchor", waiting, errors) appear in the game on their own; you do not need to build any UI.
 
+## Setup without code
+
+Instead of calling `WaxKit.Initialize` yourself, you can set the kit up in the Inspector:
+
+1. **GameObject > Unity WAX Kit > WAX Kit Manager** adds a `WAX Kit Manager` object to the scene (one per game; it stays when scenes change).
+2. Set its fields (every field has a tooltip):
+   - **Networks**: the chains the game can use. It starts with **WAX Mainnet** and **WAX Testnet**, filled with the kit's RPC and AtomicAssets endpoints. Every field can be changed, and entries and endpoints can be added, removed and reordered. Each entry has a name, chain id, RPC endpoints, AtomicAssets endpoints (may be empty), core symbol and precision. **Add WAX Mainnet** / **Add WAX Testnet** add a filled entry again (for example after you deleted one); **Add custom network** adds an empty one for any other Antelope chain.
+   - **Active Network**: the entry (by name) the game starts on; default WAX Mainnet. Switch it to WAX Testnet while developing.
+   - **App name** (see [App name](#app-name)).
+   - **Wallets**: checkboxes **Anchor**, **My Cloud Wallet**, **WebAuth App**, **WebAuth Web**, all on by default. A wallet you untick is removed when the scene starts (see [Choosing wallets and wait times](#choosing-wallets-and-wait-times)).
+   - **Theme**: Dark (default), Light, or Custom (your own colors and font).
+   - **Wait times** (see [Choosing wallets and wait times](#choosing-wallets-and-wait-times)).
+   - **WebAuth Request Account** (shown while WebAuth App is ticked): your game's own XPR Network account, `WaxKit.WebAuthRequestAccount`. WebAuth App needs it (see [Log in](#log-in)).
+
+When the scene starts, the manager applies these values and calls `WaxKit.Initialize` with the active network, so your scripts can call `WaxKit.Login` right away. Code can still change any value later; the Inspector values are only the starting values. Help boxes in the Inspector point out a chain id that is not 64 hex characters, an endpoint that is not `https://`, a network without RPC endpoints, two networks with the same name, an active network missing from the list, and an empty app name.
+
 ## App name
 
 The second argument of `WaxKit.Initialize` is shown by the wallet ("Login request from …"). Wallets show it as an **account-style name: at most 12 characters, only `a-z`, `1-5` and dots**. Other names are changed to fit, and the kit logs a warning in the Console with the name players will see:
@@ -71,7 +106,7 @@ Unity WAX Kit: AppName "Unity WAX Kit Demo" is not a valid account-style name; w
 ## Log in
 
 ```csharp
-var session = await WaxKit.Login(WalletType.Anchor);          // or WalletType.MyCloudWallet
+var session = await WaxKit.Login(WalletType.Anchor);          // or MyCloudWallet, WebAuth, WebAuthWeb
 Debug.Log(session.Actor);        // "mygameplayer"
 Debug.Log(session.Permission);   // "active"
 ```
@@ -85,6 +120,8 @@ What the player sees:
 | **WebGL** (browser) | Desktop: QR code or **Open Anchor**. Phone browser: **Open Anchor** opens the Anchor app. | Press **Continue** in the game; My Cloud Wallet opens in a popup window. |
 
 After the wallet answers, the game comes back to the front by itself (see [Platform notes](#platform-notes) for what each platform allows).
+
+**WebAuth (XPR Network).** WebAuth App and WebAuth Web work on XPR Network mainnet and testnet only (`WrongChain` elsewhere). Before a WebAuth App login, set `WaxKit.WebAuthRequestAccount` (WAX Kit Manager: **WebAuth Request Account**) to your game's own XPR Network account; without it WebAuth never answers. For a WebAuth App login the kit checks that the login proof is signed by a key of the player's account, not how old the proof is (WebAuth's version 2 login proofs have no expiry).
 
 Only offer wallets that work on the current network. Every wallet can tell you:
 
@@ -220,7 +257,7 @@ var eos = new WaxNetwork("EOS", "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ff
 WaxKit.Initialize(eos, "mygame");
 ```
 
-Anchor works on every chain Anchor supports. My Cloud Wallet works on WAX mainnet only (`WrongChain` elsewhere).
+Anchor works on every chain Anchor supports. My Cloud Wallet works on WAX mainnet only, WebAuth App and WebAuth Web on XPR Network mainnet and testnet only (`WrongChain` elsewhere).
 
 ## Wallet UI and theme
 
@@ -294,6 +331,180 @@ public sealed class MyEsrWallet : WaxEsrWallet
 
 For anything else implement `IWaxWallet` (`Login`, `Restore`, `Logout`, `Sign`, `SupportsChain`). `WaxWalletContext` gives the network, the wallet UI (`ShowSign`, `WaitForContinue`, `ShowWaiting`), `OpenLink`, `ReturnUrl`, `ReturnToGame` and the player's Cancel as a `CancellationToken`. `Sign` returns signatures (the kit broadcasts), optionally a changed transaction, or a transaction id if the wallet broadcast it itself.
 
+## Choosing wallets and wait times
+
+**Wallets.** Every build has all four built-in wallets: **Anchor** (`"anchor"`), **My Cloud Wallet** (`"mycloudwallet"`), **WebAuth App** (`"webauth"`) and **WebAuth Web** (`"webauthweb"`). To offer fewer, untick them in the WAX Kit Manager's **Wallets** checkboxes (see [Setup without code](#setup-without-code)), or remove them in code with `WaxKit.UnregisterWallet(walletId)`; this works for wallets added with `RegisterWallet` too. A removed wallet is no longer in `WaxKit.Wallets`, and `WaxKit.Login` with it throws `WaxKitException` with `NotSupported`. `RegisterWallet` adds a wallet back:
+
+```csharp
+var cloud = WaxKit.Wallets.First(w => w.Id == "mycloudwallet");
+WaxKit.UnregisterWallet("mycloudwallet");    // later: WaxKit.RegisterWallet(cloud);
+```
+
+**Wait times.** Set them before `Login` / `Transact` (or in the WAX Kit Manager). Zero or less throws `ArgumentOutOfRangeException`.
+
+| Property | Default | What waits |
+|---|---|---|
+| `WaxKit.AnchorLoginTimeout` | 5 minutes | Anchor and WebAuth App login |
+| `WaxKit.MyCloudWalletLoginTimeout` | 5 minutes | My Cloud Wallet login |
+| `WaxKit.WebAuthWebTimeout` | 5 minutes | WebAuth Web window (login and signing) |
+| `WaxKit.TransactionExpiry` | 120 seconds | How long a transaction stays valid; Anchor, WebAuth App and My Cloud Wallet wait for the signature until then. Chains refuse more than their own limit (usually one hour). |
+
+```csharp
+WaxKit.AnchorLoginTimeout = TimeSpan.FromMinutes(2);
+WaxKit.TransactionExpiry = TimeSpan.FromMinutes(5);
+WaxKit.Initialize(WaxNetwork.Testnet, "mygame");
+```
+
+## How to…
+
+The examples run inside an `async` method after a login, with `using UnityWaxKit;`, `using System.Collections.Generic;`, `using Newtonsoft.Json.Linq;` and `using UnityEngine;`.
+
+### Several actions in one transaction
+
+Pass several actions to `Transact`; the wallet asks once and they succeed or fail together. `Transact` takes an array, so a list built in a loop goes in with `ToArray()`.
+
+```csharp
+var claim = new WaxAction("mygamecontr", "claim", new { player = WaxKit.Current.Actor });
+var pay = new WaxAction("eosio.token", "transfer", new { from = WaxKit.Current.Actor, to = "mygamecontr", quantity = "1.00000000 WAX", memo = "entry" });
+await WaxKit.Transact(claim, pay);
+
+// Built from a list
+var gifts = new List<WaxAction>();
+foreach (var friend in new[] { "friendacc111", "friendacc222" })
+    gifts.Add(new WaxAction("eosio.token", "transfer", new { from = WaxKit.Current.Actor, to = friend, quantity = "0.00010000 WAX", memo = "gift" }));
+await WaxKit.Transact(gifts.ToArray());
+```
+
+Common mistakes: sending one `Transact` per action (the player approves each one); very many actions in one transaction can hit the chain's CPU limit (see [Catch errors](#catch-errors-cancelled-not-enough-cpu-contract-refused)).
+
+### Call your own contract action
+
+A `WaxAction` with your contract account, the action name and its data. The kit reads your contract's ABI from the chain, so no extra setup is needed.
+
+```csharp
+var result = await WaxKit.Transact(new WaxAction("mygamecontr", "upgrade", new
+{
+    player = WaxKit.Current.Actor,
+    item_id = 42,
+    level = 3,
+}));
+Debug.Log(result.TransactionId);
+```
+
+Common mistakes: field names that differ from the ABI (`itemId` instead of `item_id`), missing fields, or a number where the ABI wants a string such as an `asset` (`"1.00000000 WAX"`). The error message names the contract, action and field.
+
+### Read a table page by page
+
+A read returns at most `Limit` rows. While `More` is true, read on with `LowerBound = NextKey`.
+
+```csharp
+public class Player { public string account; public int level; }
+
+var query = new WaxTableQuery { Code = "mygamecontr", Scope = "mygamecontr", Table = "players", Limit = 100 };
+var all = new List<Player>();
+while (true)
+{
+    var page = await WaxKit.GetTableRows<Player>(query);
+    all.AddRange(page.Rows);
+    if (!page.More || string.IsNullOrEmpty(page.NextKey)) break;
+    query.LowerBound = page.NextKey;
+}
+```
+
+Common mistakes: using the last row's key as the next `LowerBound` (that row comes again; `NextKey` is the first row not read yet); stopping after the first page because `Rows.Count < Limit` (a node may return fewer rows and still set `More`).
+
+### Read a key range
+
+`LowerBound` and `UpperBound` limit the rows by primary key; both ends are included.
+
+```csharp
+var items = await WaxKit.GetTableRows<JObject>(new WaxTableQuery
+{
+    Code = "mygamecontr", Scope = "mygamecontr", Table = "items",
+    LowerBound = "100",
+    UpperBound = "199",
+    Limit = 100,
+});
+```
+
+Common mistakes: expecting `UpperBound` to be left out (it is included); a range with more rows than `Limit` still needs the page loop above.
+
+### Use a secondary index
+
+Set `IndexPosition` (`"2"` is the first secondary index, `"3"` the next) and `KeyType` (the index's type in the contract: `"name"`, `"i64"`, `"i128"`, `"sha256"`, ...). The bounds are then values of that index.
+
+```csharp
+// All items owned by one player, through the contract's "byowner" index (the first secondary index, type name).
+var mine = await WaxKit.GetTableRows<JObject>(new WaxTableQuery
+{
+    Code = "mygamecontr", Scope = "mygamecontr", Table = "items",
+    IndexPosition = "2",
+    KeyType = "name",
+    LowerBound = WaxKit.Current.Actor,
+    UpperBound = WaxKit.Current.Actor,
+    Limit = 100,
+});
+```
+
+Common mistakes: `"1"` for the first secondary index (`"1"` is the primary key; the first secondary index is `"2"`); a `KeyType` that does not match the index (the node answers with an error or no rows).
+
+### Newest rows first
+
+`Reverse = true` returns rows from the highest key down. With an id that grows, that is newest first.
+
+```csharp
+var latest = await WaxKit.GetTableRows<JObject>(new WaxTableQuery
+{
+    Code = "mygamecontr", Scope = "mygamecontr", Table = "matches",
+    Reverse = true,
+    Limit = 10,
+});
+```
+
+Common mistakes: paging backwards with `LowerBound = NextKey`; in reverse, read the next page with `UpperBound = NextKey`.
+
+### List a player's NFTs
+
+`WaxKit.AtomicAssets.GetAssets` with `Owner`, optionally a collection; `Page` starts at 1.
+
+```csharp
+var page = 1;
+while (true)
+{
+    var assets = await WaxKit.AtomicAssets.GetAssets(new WaxAtomicQuery { Owner = WaxKit.Current.Actor, CollectionName = "mygame", Limit = 100, Page = page });
+    foreach (var nft in assets) Debug.Log($"{nft.AssetId} {nft.Name} template {nft.Template?.TemplateId}");
+    if (assets.Count < 100) break;
+    page++;
+}
+```
+
+Common mistakes: a network with no AtomicAssets endpoints (`WaxNetwork.AtomicEndpoints` is empty, for example on a custom chain); expecting an NFT the player just received to show at once (the AtomicAssets API follows the chain a few seconds later).
+
+### Catch errors: cancelled, not enough CPU, contract refused
+
+Every failure is a `WaxKitException`. `Cancelled` means the player changed their mind. A transaction the chain refuses is `Wallet`, with the chain's message: for example "billed CPU time ... is greater than the maximum billable CPU time" when the account has too little CPU (many actions in one transaction need more), or "assertion failure with message: ..." with your contract's own text.
+
+```csharp
+try
+{
+    await WaxKit.Transact(new WaxAction("mygamecontr", "upgrade", new { player = WaxKit.Current.Actor, item_id = 42, level = 3 }));
+}
+catch (WaxKitException e) when (e.Kind == WaxErrorKind.Cancelled)
+{
+    // The player cancelled or rejected: nothing to show.
+}
+catch (WaxKitException e) when (e.Kind == WaxErrorKind.Wallet && e.Message.Contains("CPU"))
+{
+    statusText.text = "Not enough CPU. Stake more WAX for CPU, or try again later.";
+}
+catch (WaxKitException e) when (e.Kind == WaxErrorKind.Wallet)
+{
+    statusText.text = e.Message;   // for example your contract's assertion message
+}
+```
+
+Common mistakes: showing an error for `Cancelled`; catching `Exception` instead of `WaxKitException` (you lose `Kind`); retrying a CPU failure at once with the same large transaction.
+
 ## Platform notes
 
 ### WebGL
@@ -303,7 +514,7 @@ For anything else implement `IWaxWallet` (`Login`, `Restore`, `Logout`, `Sign`, 
 **Compression.** Unity compresses the build files to make them smaller: with Gzip they end in `.gz`, with Brotli in `.br` (**Player Settings > Publishing Settings > Compression Format**). The browser can only use them when the server says how they are compressed, with the HTTP header `Content-Encoding: gzip` (or `br`). Without it the game does not load and Unity shows an error about the server configuration. This is not caused by the kit, but you will meet it the first time you upload a build. Two ways to fix it:
 
 1. **Easiest: Decompression Fallback.** Turn on **Player Settings > Publishing Settings > Decompression Fallback** and build again. Unity then unpacks the files itself in the browser: works on any server, the game loads a bit slower. On phones the loading bar can wait a long time near 90%; use way 2 when your server allows it.
-2. **Faster: set the headers on your server.** Examples (file names follow your build name; check the `Build` folder):
+2. **Faster: set the headers on your server.** For **Netlify** and **Apache** the kit does this for you: after every WebGL build with Gzip or Brotli (and Decompression Fallback off) it writes `_headers` (Netlify) and `.htaccess` (Apache) next to `index.html`, so they are back even when Unity cleared the build folder. Upload them with the build. The Console says which files it wrote, or why it wrote none (compression Disabled or Decompression Fallback on: not needed). Turn either file off in **Project Settings > Unity WAX Kit > WebGL** (**Write Netlify _headers**, **Write Apache .htaccess**). What the kit writes, and examples for other servers (file names follow your build name; check the `Build` folder):
 
    Netlify, file `_headers` next to `index.html`, for **Gzip**:
 
@@ -383,16 +594,18 @@ For anything else implement `IWaxWallet` (`Login`, `Restore`, `Logout`, `Sign`, 
 
 ## Demo
 
-Open this repository in Unity Hub and run **Tools > Unity WAX Kit > Create Demo Scene**. It creates `Assets/WaxKitDemo/WaxKitDemo.unity` (testnet by default) with login, a 0.0001 WAX transfer, a balance read and an NFT read. It runs in the Editor and in WebGL, Windows and Android builds, and uses the Input System package.
+Open this repository in Unity Hub, open `Assets/WaxKitDemo/WaxKitDemo.unity` and press Play. The scene has a `WAX Kit Manager` with four networks, WAX Testnet (first, and the one the demo starts on), WAX Mainnet, Jungle 4 and XPR Testnet, and all four wallets on. The demo has a network menu (picking a network switches to it and restores its saved session), login buttons for the wallets that work on the chosen network, a 0.0001 transfer of the network's core token, a balance read and an NFT read. It runs in the Editor and in WebGL, Windows and Android builds, and uses the Input System package.
 
 ## Current limits
 
 - **My Cloud Wallet works on WAX mainnet only** (`WrongChain` elsewhere).
-- **iOS, macOS and Linux** are not supported yet: wallet calls throw `NotSupported` there; table and AtomicAssets reads work.
+- **WebAuth web login is not proven by a signature** (same as XPR's own SDK: the page only reports the account); transactions are signed and broadcast by WebAuth.
+- **iOS, macOS and Linux players** are not supported yet: wallet calls throw `NotSupported` there; table and AtomicAssets reads work. (A WebGL build works in the browsers on these systems.)
 - **Android Custom Tab bottom sheet** needs a browser with partial Custom Tabs (Chrome 107+); other browsers show the page full height.
-- The buoy relay (`https://cb.anchor.link`, run by Greymass) carries the Anchor messages; it keeps one pending message per channel, which is all the wallet protocols need.
-- **Tested on real devices:** WAX mainnet and testnet; Unity Editor and Windows player (Mono) with Anchor desktop 1.4.0 and My Cloud Wallet in Chrome; Android phone (Xiaomi, Android 16) with the Anchor app and My Cloud Wallet in Chrome; WebGL in Chrome on Windows and on Android.
-- **Not tested yet:** other Antelope chains (supported in code), Safari on iPhone / iPad, Windows IL2CPP builds, other browsers (Edge, Firefox, Samsung Internet...).
+- **WebAuth on Android does not return to the game after Reject** (WebAuth's behavior); the game shows `Cancelled` when the player comes back.
+- The buoy relay (`https://cb.anchor.link`, run by Greymass) carries the Anchor and WebAuth App messages; it keeps one pending message per channel, which is all the wallet protocols need.
+- **Tested on real devices (2026-11-03):** networks WAX Mainnet, WAX Testnet, Jungle 4, XPR Testnet; wallets Anchor (desktop 1.4.0 and phone app), My Cloud Wallet (WAX Mainnet), WebAuth App, WebAuth Web (XPR Testnet); Unity Editor, Windows Mono and IL2CPP players, Android (Xiaomi, Android 16), WebGL in Chrome on Windows and Android, and in Chrome and Safari on iPhone 14 Pro Max.
+- **Not tested yet:** other Antelope chains (Telos, Libre, FIO, EOS mainnet and others; supported in code), XPR mainnet, other browsers (Edge, Firefox, Samsung Internet...).
 
 These lists will be updated as more is tested.
 
@@ -408,7 +621,7 @@ Found a fix for one of these? Anyone is welcome to open a pull request.
 
 ## Changelog
 
-See [CHANGELOG.md](Packages/com.gulkonster.waxkit/CHANGELOG.md).
+See [CHANGELOG.md](Packages/com.unitywaxkit.core/CHANGELOG.md).
 
 The kit's automated tests run in the Editor: **Window > General > Test Runner > EditMode > Run All**.
 
@@ -422,7 +635,7 @@ The kit's automated tests run in the Editor: **Window > General > Test Runner > 
 
 ## License
 
-MIT. The kit ships BouncyCastle, adds AndroidX Browser to Android builds, and contains C# ports of parts of WharfKit, Greymass buoy, elliptic, hmac-drbg and qrcode-generator. **Games that ship the kit must include [`THIRD_PARTY_NOTICES.md`](Packages/com.gulkonster.waxkit/THIRD_PARTY_NOTICES.md)**, for example on a licenses / credits screen or as a file next to the game.
+MIT. The kit ships BouncyCastle, adds AndroidX Browser to Android builds, and contains C# ports of parts of WharfKit, Greymass buoy, elliptic, hmac-drbg and qrcode-generator. **Games that ship the kit must include [`THIRD_PARTY_NOTICES.md`](Packages/com.unitywaxkit.core/THIRD_PARTY_NOTICES.md)**, for example on a licenses / credits screen or as a file next to the game.
 
 Questions and bug reports: open an issue.
 

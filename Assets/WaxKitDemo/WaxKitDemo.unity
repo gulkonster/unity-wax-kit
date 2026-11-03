@@ -343,6 +343,108 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1300000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1300000003}
+  - component: {fileID: 1300000002}
+  m_Layer: 0
+  m_Name: WAX Kit Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1300000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1300000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6cf5cd001c40441790d270a6364cfcbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityWaxKit::UnityWaxKit.WaxKitManager
+  networks:
+  - name: WAX Testnet
+    chainId: f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
+    rpcEndpoints:
+    - https://testnet.waxsweden.org
+    - https://api.waxtest.alohaeos.com
+    - https://waxtest.api.eosnation.io
+    atomicEndpoints:
+    - https://test.wax.api.atomicassets.io
+    - https://wax-testnet.api.atomicassets.io
+    coreSymbol: WAX
+    precision: 8
+  - name: WAX Mainnet
+    chainId: 1064487b3cd1a897ce03ae5b6a865651747e2e152090f99c1d19d44e01aea5a4
+    rpcEndpoints:
+    - https://api.wax.alohaeos.com
+    - https://api.waxsweden.org
+    - https://wax.eosusa.io
+    - https://wax.eosphere.io
+    - https://wax.api.eosnation.io
+    - https://api.wax.bountyblok.io
+    atomicEndpoints:
+    - https://wax-aa.eu.eosamsterdam.net
+    - https://wax.eosusa.io
+    - https://atomic.wax.eosrio.io
+    - https://wax-atomic-api.eosphere.io
+    - https://wax.api.atomicassets.io
+    coreSymbol: WAX
+    precision: 8
+  - name: Jungle 4
+    chainId: 73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d
+    rpcEndpoints:
+    - https://jungle4.greymass.com
+    - https://jungle4.cryptolions.io
+    atomicEndpoints: []
+    coreSymbol: EOS
+    precision: 4
+  - name: XPR Testnet
+    chainId: 71ee83bcf52142d61019d95f9cc5427ba6a0d7ff8accd9e2088ae2abeaf3d3dd
+    rpcEndpoints:
+    - https://testnet.protonchain.com
+    - https://testnet.rockerone.io
+    - https://tn1.protonnz.com
+    atomicEndpoints: []
+    coreSymbol: XPR
+    precision: 4
+  activeNetwork: WAX Testnet
+  appName: waxkitdemo
+  anchor: 1
+  myCloudWallet: 1
+  webAuthApp: 1
+  webAuthWeb: 1
+  theme: 0
+  anchorLoginTimeoutSeconds: 300
+  myCloudWalletLoginTimeoutSeconds: 300
+  webAuthWebTimeoutSeconds: 300
+  transactionExpirySeconds: 120
+  webAuthRequestAccount: waxkittester
+--- !u!4 &1300000003
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1300000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -350,3 +452,4 @@ SceneRoots:
   - {fileID: 1922834328}
   - {fileID: 206037103}
   - {fileID: 1845155608}
+  - {fileID: 1300000003}

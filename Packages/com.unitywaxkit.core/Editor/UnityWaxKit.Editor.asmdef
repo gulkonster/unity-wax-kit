@@ -1,0 +1,14 @@
+{
+    "name": "UnityWaxKit.Editor",
+    "rootNamespace": "UnityWaxKit.Editor",
+    "references": [
+        "UnityWaxKit"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": false,
+    "noEngineReferences": false
+}

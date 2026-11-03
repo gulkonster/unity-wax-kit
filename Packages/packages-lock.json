@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "com.gulkonster.waxkit": {
-      "version": "file:com.gulkonster.waxkit",
+    "com.unitywaxkit.core": {
+      "version": "file:com.unitywaxkit.core",
       "depth": 0,
       "source": "embedded",
       "dependencies": {
