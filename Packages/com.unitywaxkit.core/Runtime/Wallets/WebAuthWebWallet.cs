@@ -106,7 +106,7 @@ namespace UnityWaxKit
 
             // WebAuth sets its own expiration and reference block; everything else must be the game's transaction.
             var original = AntelopeTransaction.Decode(request.SerializedTransaction);
-            if (!JToken.DeepEquals(original["actions"], signed["actions"])
+            if (new[] { "actions", "delay_sec", "max_cpu_usage_ms", "max_net_usage_words" }.Any(field => !JToken.DeepEquals(original[field], signed[field]))
                 || (signed["context_free_actions"] as JArray)?.Count > 0 || (signed["transaction_extensions"] as JArray)?.Count > 0)
                 throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth changed the transaction.");
 

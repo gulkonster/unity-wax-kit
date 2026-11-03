@@ -342,8 +342,7 @@ namespace UnityWaxKit
             // A RestoreSession still running must not overwrite this login's session. A failed or cancelled login
             // changes nothing: the session it would have replaced stays.
             generation++;
-            SetSession(wallet, walletSession);
-            SaveCurrent();
+            SetSession(wallet, walletSession, true);
             return Current;
         }
 
@@ -386,7 +385,7 @@ namespace UnityWaxKit
 
             // The game may have logged out or switched networks while this ran.
             if (generation != started || Network != network) return null;
-            SetSession(wallet, walletSession);
+            SetSession(wallet, walletSession, false);
             return Current;
         }
 
@@ -399,8 +398,7 @@ namespace UnityWaxKit
                 var walletSession = await wallet.ResumeLogin(new WaxWalletContext(network, AppName, UI), TimeSpan.FromSeconds(10));
                 if (generation != started || Network != network) return null;
                 if (walletSession == null) continue;
-                SetSession(wallet, walletSession);
-                SaveCurrent();
+                SetSession(wallet, walletSession, true);
                 return Current;
             }
             return null;
@@ -472,8 +470,7 @@ namespace UnityWaxKit
 
             // A RestoreSession still running must not overwrite the account the player picked.
             generation++;
-            SetSession(wallet, walletSession);
-            SaveCurrent();
+            SetSession(wallet, walletSession, true);
             return Current;
         }
 
@@ -628,10 +625,12 @@ namespace UnityWaxKit
         static TimeSpan Positive(TimeSpan value, string name) =>
             value > TimeSpan.Zero ? value : throw new ArgumentOutOfRangeException(name, value, $"WaxKit.{name} must be more than zero.");
 
-        static void SetSession(IWaxWallet wallet, WaxWalletSession walletSession)
+        /// <summary>Makes the session current; with <paramref name="save"/> saves it first, so SessionChanged sees the saved list.</summary>
+        static void SetSession(IWaxWallet wallet, WaxWalletSession walletSession, bool save)
         {
             currentWallet = wallet;
             currentWalletSession = walletSession;
+            if (save) SaveCurrent();
             Current = new WaxSession(walletSession.Actor, walletSession.Permission, WalletTypeOf(wallet.Id), wallet.Id, Network.ChainId);
         }
 
