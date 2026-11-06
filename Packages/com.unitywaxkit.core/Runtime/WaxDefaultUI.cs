@@ -198,7 +198,12 @@ namespace UnityWaxKit
             text.fontSize = size;
             text.fontStyle = style;
             text.alignment = TextAlignmentOptions.Center;
+#if UNITY_2023_2_OR_NEWER
             text.textWrappingMode = TextWrappingModes.Normal;
+#else
+            // TextMeshPro 3.0 (Unity 2022.3); obsolete in the TextMeshPro inside ugui 2.0.
+            text.enableWordWrapping = true;
+#endif
             return text;
         }
 

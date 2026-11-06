@@ -64,7 +64,7 @@ namespace UnityWaxKit.Platform
             this.post = post;
             this.protocol = protocol;
             this.onFinished = onFinished;
-            server = new WaxLoopbackServer(Handle);
+            server = new WaxLoopbackServer(Handle, $"/{token}/");
         }
 
         WaxLoopbackServer.Response Handle(WaxLoopbackServer.Request request)

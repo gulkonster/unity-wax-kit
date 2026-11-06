@@ -1,15 +1,5 @@
 {
   "dependencies": {
-    "com.unitywaxkit.core": {
-      "version": "file:com.unitywaxkit.core",
-      "depth": 0,
-      "source": "embedded",
-      "dependencies": {
-        "com.unity.nuget.newtonsoft-json": "3.2.1",
-        "com.unity.ugui": "2.0.0",
-        "com.unity.modules.androidjni": "1.0.0"
-      }
-    },
     "com.unity.ext.nunit": {
       "version": "2.0.5",
       "depth": 1,
@@ -42,6 +32,14 @@
         "com.unity.modules.jsonserialize": "1.0.0"
       }
     },
+    "com.unity.textmeshpro": {
+      "version": "5.0.0",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.ugui": "2.0.0"
+      }
+    },
     "com.unity.ugui": {
       "version": "2.0.0",
       "depth": 0,
@@ -51,15 +49,40 @@
         "com.unity.modules.imgui": "1.0.0"
       }
     },
+    "com.unitywaxkit.core": {
+      "version": "file:com.unitywaxkit.core",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.2.1",
+        "com.unity.ugui": "1.0.0",
+        "com.unity.textmeshpro": "3.0.7",
+        "com.unity.modules.androidjni": "1.0.0",
+        "com.unity.modules.imageconversion": "1.0.0",
+        "com.unity.modules.video": "1.0.0"
+      }
+    },
     "com.unity.modules.androidjni": {
       "version": "1.0.0",
       "depth": 1,
       "source": "builtin",
       "dependencies": {}
     },
+    "com.unity.modules.audio": {
+      "version": "1.0.0",
+      "depth": 2,
+      "source": "builtin",
+      "dependencies": {}
+    },
     "com.unity.modules.hierarchycore": {
       "version": "1.0.0",
       "depth": 2,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.imageconversion": {
+      "version": "1.0.0",
+      "depth": 1,
       "source": "builtin",
       "dependencies": {}
     },
@@ -104,6 +127,16 @@
       "depth": 0,
       "source": "builtin",
       "dependencies": {}
+    },
+    "com.unity.modules.video": {
+      "version": "1.0.0",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.ui": "1.0.0",
+        "com.unity.modules.unitywebrequest": "1.0.0"
+      }
     }
   }
 }

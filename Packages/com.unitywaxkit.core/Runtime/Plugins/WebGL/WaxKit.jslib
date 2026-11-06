@@ -8,8 +8,16 @@ var WaxKitPlugin = {
     popups: {},
     armed: null,
 
+    // A new UTF-8 copy of the text on the heap (the caller frees it). Works in Unity 2022.3 and Unity 6.
+    newUTF8: function (text) {
+      var size = lengthBytesUTF8(text) + 1;
+      var ptr = _malloc(size);
+      stringToUTF8(text, ptr, size);
+      return ptr;
+    },
+
     send: function (kind, id, text) {
-      var ptr = stringToNewUTF8(text === undefined || text === null ? '' : String(text));
+      var ptr = WaxKit.newUTF8(text === undefined || text === null ? '' : String(text));
       try {
         {{{ makeDynCall('viii', 'WaxKit.onEvent') }}}(kind, id, ptr);
       } finally {
@@ -71,7 +79,7 @@ var WaxKitPlugin = {
   },
 
   WaxKit_ReturnUrl: function () {
-    return stringToNewUTF8(WaxKit.returnUrl());
+    return WaxKit.newUTF8(WaxKit.returnUrl());
   },
 
   WaxKit_OpenLink: function (url) {

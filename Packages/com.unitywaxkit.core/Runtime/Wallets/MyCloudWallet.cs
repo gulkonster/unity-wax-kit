@@ -217,8 +217,10 @@ namespace UnityWaxKit
         internal static void ValidateModifications(JObject original, JObject modified, string actor, string permission)
         {
             if (!JToken.DeepEquals(original["delay_sec"], modified["delay_sec"])
-                || !JToken.DeepEquals(original["context_free_actions"], modified["context_free_actions"]))
-                throw new WaxKitException(WaxErrorKind.Wallet, "The modified transaction changed the delay or the context-free actions.");
+                || !JToken.DeepEquals(original["context_free_actions"], modified["context_free_actions"])
+                // Extensions change how the chain runs the transaction (for example who pays for it); the game sets none.
+                || !JToken.DeepEquals(original["transaction_extensions"], modified["transaction_extensions"]))
+                throw new WaxKitException(WaxErrorKind.Wallet, "The modified transaction changed the delay, the context-free actions or the extensions.");
 
             var originalActions = ((JArray)original["actions"]).Cast<JObject>().ToList();
             var modifiedActions = ((JArray)modified["actions"]).Cast<JObject>().ToList();

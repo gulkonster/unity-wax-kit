@@ -1,9 +1,9 @@
 {
   "name": "com.unitywaxkit.core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "displayName": "Unity WAX Kit",
   "description": "WAX and Antelope wallet login (Anchor, My Cloud Wallet, pluggable wallets), transactions, table reads and AtomicAssets reads for Unity games on WebGL, Windows and Android.",
-  "unity": "6000.0",
+  "unity": "2022.3",
   "license": "MIT",
   "documentationUrl": "https://github.com/gulkonster/unity-wax-kit#readme",
   "changelogUrl": "https://github.com/gulkonster/unity-wax-kit/blob/main/Packages/com.unitywaxkit.core/CHANGELOG.md",
@@ -14,8 +14,11 @@
   },
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "com.unity.ugui": "2.0.0",
-    "com.unity.modules.androidjni": "1.0.0"
+    "com.unity.ugui": "1.0.0",
+    "com.unity.textmeshpro": "3.0.7",
+    "com.unity.modules.androidjni": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.video": "1.0.0"
   },
   "keywords": [
     "wax",

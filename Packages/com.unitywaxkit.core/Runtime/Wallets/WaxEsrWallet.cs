@@ -81,14 +81,16 @@ namespace UnityWaxKit
                 Name, showQr ? request.Encode(true, false, scheme + ":") : null, showOpen ? () => OpenWallet(context, link, false) : (Action)null, expiresAt);
 
             // If the system stops the game while the player is in the wallet, RestoreSession picks the answer up.
-            SavePending(context, channel, requestKey, expiresAt);
+            // The scope this request carries (version 3 only): the identity proof must be for exactly this one.
+            var scope = request.IdentityScope;
+            SavePending(context, channel, requestKey, expiresAt, scope);
             try
             {
                 // On a phone the wallet app opens right away. On a computer the player picks the QR (phone) or the Open
                 // button (wallet app on this computer): opening the desktop app by itself would also send the request
                 // there while the player scans the QR, and a Cancel in the desktop app would end the login.
                 if (installed == true && context.IsMobile) context.OpenLink(link);
-                return await CompleteLogin(context, channel, requestKey, expiresAt);
+                return await CompleteLogin(context, channel, requestKey, expiresAt, scope);
             }
             finally
             {
@@ -96,7 +98,8 @@ namespace UnityWaxKit
             }
         }
 
-        async Task<WaxWalletSession> CompleteLogin(WaxWalletContext context, string channel, PrivateKey requestKey, DateTime expiresAt)
+        /// <param name="scope">The scope the identity request carried (null for version 2 requests, which have none).</param>
+        async Task<WaxWalletSession> CompleteLogin(WaxWalletContext context, string channel, PrivateKey requestKey, DateTime expiresAt, string scope)
         {
             var payload = await WaitForCallback(context, channel, expiresAt);
             context.ReturnToGame();
@@ -108,7 +111,7 @@ namespace UnityWaxKit
 
             var actor = (string)payload["sa"];
             var permission = (string)payload["sp"];
-            await VerifyIdentity(context, payload, actor, permission);
+            await VerifyIdentity(context, payload, actor, permission, scope);
             return new WaxWalletSession(actor, permission, OnLogin(context, payload, requestKey));
         }
 
@@ -128,7 +131,10 @@ namespace UnityWaxKit
                 var expiresAt = AntelopeTime.Parse((string)pending["expires"]);
                 if (expiresAt <= DateTime.UtcNow) return null;
                 if (expiresAt - DateTime.UtcNow > maxWait) expiresAt = DateTime.UtcNow + maxWait;
-                return await CompleteLogin(context, (string)pending["channel"], PrivateKey.Parse((string)pending["requestKey"]), expiresAt);
+                // A pending login saved by 0.3.0 has no "scope": its request carried the app name as scope then too.
+                var scope = pending["scope"] != null ? (string)pending["scope"]
+                    : Layout == EsrLayout.WharfKit ? context.AppNameAsName : null;
+                return await CompleteLogin(context, (string)pending["channel"], PrivateKey.Parse((string)pending["requestKey"]), expiresAt, scope);
             }
             catch (Exception)
             {
@@ -136,13 +142,14 @@ namespace UnityWaxKit
             }
         }
 
-        void SavePending(WaxWalletContext context, string channel, PrivateKey requestKey, DateTime expiresAt) =>
+        void SavePending(WaxWalletContext context, string channel, PrivateKey requestKey, DateTime expiresAt, string scope) =>
             WaxPlatform.Current.Save(PendingKey(context), new JObject
             {
                 ["wallet"] = Id,
                 ["channel"] = channel,
                 ["requestKey"] = requestKey.ToSecretString(),
                 ["expires"] = AntelopeTime.FormatSeconds(expiresAt),
+                ["scope"] = scope,
             }.ToString(Newtonsoft.Json.Formatting.None));
 
         static string PendingKey(WaxWalletContext context) => "waxkit.pending." + context.Network.ChainId;
@@ -292,8 +299,11 @@ namespace UnityWaxKit
             return new WaxSignResult(signatures);
         }
 
-        /// <summary>Checks the identity proof: the signature must come from a key of actor@permission and not be expired.</summary>
-        async Task VerifyIdentity(WaxWalletContext context, JObject payload, string actor, string permission)
+        /// <summary>
+        /// Checks the identity proof: for the scope this game's request carried (version 3), signed by a key of
+        /// actor@permission, not expired.
+        /// </summary>
+        async Task VerifyIdentity(WaxWalletContext context, JObject payload, string actor, string permission, string scope)
         {
             IdentityProof proof;
             try
@@ -307,6 +317,12 @@ namespace UnityWaxKit
             // The proof must be for the version this wallet's login request has (version 2 proofs have no expiration).
             if (proof.Version != (Layout == EsrLayout.ProtonLink ? 2 : 3))
                 throw new WaxKitException(WaxErrorKind.Wallet, $"Invalid identity proof: unexpected request version {proof.Version}.");
+            // The scope (this game's app name) is part of what the wallet signed: a proof made for another app name is
+            // refused. The proof signs nothing per login (chain id, scope, the wallet's expiration, actor@permission), so
+            // it does not tell two logins of the same app apart. What ties it to this login: it must arrive on this
+            // login's random buoy channel (only in this login's QR code / link) and not be expired (checked below).
+            if (proof.Version > 2 && !string.Equals(proof.Scope, scope, StringComparison.Ordinal))
+                throw new WaxKitException(WaxErrorKind.Wallet, $"The login proof is for another app ('{proof.Scope}'), not this game ('{scope}'). Please log in again.");
 
             var account = await context.GetAccount(actor);
             var level = (account["permissions"] as JArray)?.FirstOrDefault(p => (string)p["perm_name"] == permission);

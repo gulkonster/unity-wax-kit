@@ -92,6 +92,17 @@ namespace UnityWaxKit
             if (string.IsNullOrEmpty(serialized) || signatures == null || signatures.Count == 0 || signatures.Any(string.IsNullOrEmpty))
                 throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth did not return a signed transaction.");
 
+            var packed = CheckSignedTransaction(request.SerializedTransaction, serialized);
+            return new WaxSignResult(signatures, packed);
+        }
+
+        /// <summary>
+        /// The transaction WebAuth signed (hex), checked against the game's: WebAuth sets its own expiration and reference
+        /// block; actions (with their authorizations and data), delay and resource limits must be the game's, with no
+        /// context-free actions or extensions. Returns its bytes.
+        /// </summary>
+        internal static byte[] CheckSignedTransaction(byte[] requested, string serialized)
+        {
             byte[] packed;
             JObject signed;
             try
@@ -104,13 +115,11 @@ namespace UnityWaxKit
                 throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth returned an unreadable transaction.");
             }
 
-            // WebAuth sets its own expiration and reference block; everything else must be the game's transaction.
-            var original = AntelopeTransaction.Decode(request.SerializedTransaction);
+            var original = AntelopeTransaction.Decode(requested);
             if (new[] { "actions", "delay_sec", "max_cpu_usage_ms", "max_net_usage_words" }.Any(field => !JToken.DeepEquals(original[field], signed[field]))
                 || (signed["context_free_actions"] as JArray)?.Count > 0 || (signed["transaction_extensions"] as JArray)?.Count > 0)
                 throw new WaxKitException(WaxErrorKind.Wallet, "WebAuth changed the transaction.");
-
-            return new WaxSignResult(signatures, packed);
+            return packed;
         }
 
         /// <summary>Opens the page (inside the player's Continue click where the platform needs it) and waits for its answer.</summary>

@@ -24,7 +24,7 @@ namespace UnityWaxKit
     ///     Debug.Log(result.TransactionId);
     /// }
     /// </code></example>
-    public static class WaxKit
+    public static partial class WaxKit
     {
         internal const string Version = "0.2.1";
         const string SessionKeyPrefix = "waxkit.session.";
@@ -603,7 +603,13 @@ namespace UnityWaxKit
 
         /// <summary>Reads contract table rows as <typeparamref name="T"/> (your row class, or JObject). No login needed.</summary>
         public static async Task<WaxTableResult<T>> GetTableRows<T>(WaxTableQuery query) =>
-            JsonConvert.DeserializeObject<WaxTableResult<T>>(await GetTableRowsJson(query));
+            ReadTableRows<T>(await GetTableRowsJson(query));
+
+        // Row text stays as the chain sent it: a time_point such as "2026-11-04T05:00:00.000" in a JObject row is not
+        // turned into a date (read back as text, it would come in the device's date format). DateTime fields still read it.
+        static readonly JsonSerializerSettings TableRowSettings = new JsonSerializerSettings { DateParseHandling = DateParseHandling.None };
+
+        internal static WaxTableResult<T> ReadTableRows<T>(string json) => JsonConvert.DeserializeObject<WaxTableResult<T>>(json, TableRowSettings);
 
         internal static string WalletIdOf(WalletType wallet) =>
             wallet == WalletType.Anchor ? AnchorId
@@ -786,7 +792,8 @@ namespace UnityWaxKit
             }
         }
 
-        static void LogWarning(string message)
+        /// <summary>A warning in the Unity console (or the console outside Unity), with the kit's prefix.</summary>
+        internal static void LogWarning(string message)
         {
 #if UNITY_5_3_OR_NEWER
             UnityEngine.Debug.LogWarning("Unity WAX Kit: " + message);

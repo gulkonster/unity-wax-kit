@@ -1,6 +1,6 @@
 # Unity WAX Kit
 
-[![Unity 6.0+](https://img.shields.io/badge/Unity-6.0%2B-black?logo=unity)](https://unity.com)
+[![Unity 2022.3+](https://img.shields.io/badge/Unity-2022.3%2B-black?logo=unity)](https://unity.com)
 [![WAX](https://img.shields.io/badge/chain-WAX-f89022)](https://wax.io)
 [![Platforms](https://img.shields.io/badge/platforms-WebGL%20%7C%20Windows%20%7C%20Android-blue)](#platform-notes)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -8,6 +8,8 @@
 WAX (and other Antelope chain) wallets for Unity games: log in with **Anchor**, **My Cloud Wallet**, **WebAuth App** or **WebAuth Web**, send transactions, read contract tables and AtomicAssets (NFT) data from C#. The wallet always signs, so the kit never handles the player's keys. The same C# code runs on **WebGL, Windows (player and Editor) and Android**.
 
 > **Use at your own risk. Not audited. Test on testnet first.**
+
+**New to the kit?** Read Install, Quick start and Setup without code: the defaults work, and errors say what to do. **Going further:** Networks and endpoints (your own chain or services), Adding a wallet, Prices and token balances, NFT images and videos and How to… change the defaults.
 
 ## Try it
 
@@ -24,11 +26,13 @@ The demo opens on WAX Testnet; pick another network in its menu.
 - Call your own contract's actions.
 - Read contract tables (balances, your own tables).
 - Read a player's NFTs (AtomicAssets).
+- Show token prices (Alcor), the network coin in USD and the player's token balances with their value.
+- Show NFT images, animated GIFs and videos from IPFS (uGUI component or code).
 - Restore the saved session when the game starts again.
 - Switch networks (WAX Mainnet, WAX Testnet, any Antelope chain).
 - Use your own wallet UI instead of the built-in one.
 
-**Contents:** [Try it](#try-it) · [What you can do](#what-you-can-do) · [Install](#install) · [Quick start](#quick-start) · [Setup without code](#setup-without-code) · [App name](#app-name) · [Log in](#log-in) · [Send a transaction](#send-a-transaction) · [Errors](#errors) · [Restore and log out](#restore-and-log-out) · [Read balance, tables and NFTs](#read-balance-tables-and-nfts) · [Networks and endpoints](#networks-and-endpoints) · [Wallet UI and theme](#wallet-ui-and-theme) · [Adding a wallet](#adding-a-wallet) · [Choosing wallets and wait times](#choosing-wallets-and-wait-times) · [How to…](#how-to) · [Platform notes](#platform-notes) ([WebGL](#webgl) · [Windows](#windows) · [Android](#android)) · [Demo](#demo) · [Current limits](#current-limits) · [Known issues](#known-issues)
+**Contents:** [Try it](#try-it) · [What you can do](#what-you-can-do) · [Install](#install) · [Quick start](#quick-start) · [Setup without code](#setup-without-code) · [App name](#app-name) · [Log in](#log-in) · [Send a transaction](#send-a-transaction) · [Errors](#errors) · [Restore and log out](#restore-and-log-out) · [Read balance, tables and NFTs](#read-balance-tables-and-nfts) · [Prices and token balances](#prices-and-token-balances) · [NFT images and videos](#nft-images-and-videos) · [Networks and endpoints](#networks-and-endpoints) · [Wallet UI and theme](#wallet-ui-and-theme) · [Adding a wallet](#adding-a-wallet) · [Choosing wallets and wait times](#choosing-wallets-and-wait-times) · [How to…](#how-to) · [Platform notes](#platform-notes) ([WebGL](#webgl) · [Windows](#windows) · [Android](#android)) · [Demo](#demo) · [Current limits](#current-limits) · [Known issues](#known-issues)
 
 ## Words used here
 
@@ -40,15 +44,15 @@ The demo opens on WAX Testnet; pick another network in its menu.
 
 ## Install
 
-1. Unity 6.0 or newer (built and tested with Unity 6000.4.5f1).
+1. Unity 2022.3 or newer (built with Unity 6000.4.5f1, also checked with Unity 2022.3.62f3).
 2. **Window > Package Manager > + > Install package from git URL…**, enter:
 
    ```
    https://github.com/gulkonster/unity-wax-kit.git?path=/Packages/com.unitywaxkit.core
    ```
 
-3. The package brings `com.unity.nuget.newtonsoft-json`, `com.unity.ugui` and the Android JNI module with it.
-4. The wallet UI uses TextMeshPro. If your project has never used it, run **Window > TextMeshPro > Import TMP Essential Resources** once (otherwise the wallet panel has no text and the Console says so).
+3. The package brings `com.unity.nuget.newtonsoft-json`, `com.unity.ugui`, TextMeshPro (`com.unity.textmeshpro` in Unity 2022.3; part of `com.unity.ugui` in Unity 6) and the Android JNI, Image Conversion and Video modules (built into Unity) with it.
+4. The wallet UI uses TextMeshPro. If your project has never used it, run **Window > TextMeshPro > Import TMP Essential Resources** once (otherwise the wallet panel has no text and the Console says so). In Unity 2022.3, import TMP Essential Resources once (same menu) when Unity asks.
 5. Android only: check **Project Settings > Unity WAX Kit** (see [Android](#android)).
 
 ## Quick start
@@ -74,6 +78,8 @@ public class WalletExample : MonoBehaviour
 ```
 
 Every kit call is `async`: call it with `await` inside an `async` method (in a MonoBehaviour, `async void Start()` or `async void OnButtonClicked()` is fine). The wallet steps (QR code, "Open Anchor", waiting, errors) appear in the game on their own; you do not need to build any UI.
+
+**A testnet account to try it.** Create a free WAX testnet account (and get free testnet WAX) at [waxsweden.org/testnet](https://waxsweden.org/testnet/), see the [WAX testnet quickstart](https://docs.wax.io/build/dapp-development/testnet-quickstart). In Anchor, import that account's private key and pick the **WAX (Testnet)** chain (enable it in Anchor's blockchain list if it is hidden). Never use a mainnet key for testing.
 
 ## Setup without code
 
@@ -137,6 +143,8 @@ One wallet request at a time: a new `Login` or `Transact`, `Logout` or `Initiali
 Only offer wallets that work on the current network. Every wallet can tell you:
 
 ```csharp
+using System.Linq;   // for First() below
+
 foreach (var wallet in WaxKit.Wallets)
     Debug.Log($"{wallet.Name}: {(wallet.SupportsChain(WaxKit.Network) ? "available" : "not on this network")}");
 
@@ -189,7 +197,7 @@ catch (WaxKitException e)
 | `Cancelled` | Cancel in the game, the wallet window closed, or Reject in the wallet (on phones also: the player came back from the wallet without approving). |
 | `Timeout` | The wallet did not answer before the request expired (about 2 minutes for transactions, 5 for logins). |
 | `Wallet` | The wallet or the chain refused it; the message says why. |
-| `Network` | No endpoint answered (offline or all endpoints down). |
+| `Network` | No endpoint gave a usable answer (offline, all endpoints down, or answering error pages instead of JSON). |
 | `NotLoggedIn` | `Transact` before a login. |
 | `WrongChain` | The wallet does not work on this network (My Cloud Wallet on testnet). |
 | `NotSupported` | Not available on this platform (for example iOS), or an unknown wallet id. |
@@ -293,6 +301,10 @@ var template = await atomic.GetTemplate("mygame", "123456");
 var listings = await atomic.GetListings(new WaxAtomicQuery { CollectionName = "mygame", Sort = "price", Order = "asc" });
 var prices = await atomic.GetTemplatePrices(new WaxAtomicQuery { CollectionName = "mygame" });
 
+// Cheapest listing and last sale of a template, or null; Price is in the network's own token (Price.Amount, Price.TokenPrecision)
+var cheapest = await atomic.GetLowestListing("123456");
+var last = await atomic.GetLastSale("123456");
+
 // Any other filter the API documents
 var burnable = await atomic.GetAssets(new WaxAtomicQuery { Owner = "mygameplayer" }.Set("is_burnable", "true"));
 // Anything not modelled: the raw JSON ({ success, data, query_time })
@@ -301,9 +313,134 @@ var json = await atomic.GetJson("/atomicmarket/v1/auctions", new WaxAtomicQuery 
 
 Fields without a property stay in `Extra`. NFT actions (transfer, burn, buy) are normal transactions through `WaxKit.Transact`.
 
+## Prices and token balances
+
+Read-only market data: a token's price, the network coin in USD, and the player's token balances with their value. No login is needed for prices; the tracked balances are the logged-in account's.
+
+```csharp
+// Price of a token in the network coin (here: TLM in WAX). Tokens are always contract + symbol.
+WaxPrice tlm = await WaxKit.Alcor.GetPrice("alien.worlds", "TLM");
+if (tlm.HasValue) priceText.text = $"1 TLM = {tlm.Value} {tlm.Unit}";
+else priceText.text = "No price: " + tlm.Reason;          // never a guess, never 0
+
+// The network coin in USD (WAX/USD)
+WaxPrice waxUsd = await WaxKit.GetCoreUsdPrice();
+
+// Balances (one request per token). 0 when the account holds none.
+WaxBalance wax = await WaxKit.GetBalance("mygameplayer", "eosio.token", "WAX");
+Debug.Log(wax);                                            // "12.34000000 WAX"
+
+// "My tokens are worth about X WAX / $Y" for the logged-in player
+WaxKit.MarketSettings.TrackedTokens.Add(new WaxToken("alien.worlds", "TLM"));
+WaxKit.MarketSettings.TrackedTokens.Add(new WaxToken("chickentoken", "CRW", poolId: 12948)); // price from this pool only
+WaxBalanceValues worth = await WaxKit.GetBalanceValues();
+totalText.text = $"About {worth.CoinTotal:0.####} {worth.CoinSymbol}" +
+                 (worth.UsdTotal != null ? $" / ${worth.UsdTotal:0.##}" : "") +
+                 (worth.UnpricedCount > 0 ? $" ({worth.UnpricedCount} tokens without a price are not counted)" : "");
+```
+
+**Where prices come from.**
+
+| Price | Source | Setting |
+|---|---|---|
+| Token in the network coin | [Alcor Exchange](https://alcor.exchange). **Auto** (default): an Alcor swap pool; when there is none, the last trade of the Alcor spot market. **Pool Only** or **Spot Only** use only one. | `WaxKit.MarketSettings.PriceSource` |
+| Which pool | A pool id you set for the token (`new WaxToken(contract, symbol, poolId)`, or the WAX Kit Manager's Tracked Tokens) is always used; if that pool is missing, is another pair or is empty, the price is null with that reason, never taken from another pool. Otherwise the kit takes the pool with the largest network-coin reserve (for example the largest WAX reserve: the WAX the pool holds), a tie goes to the lower fee. | |
+| Direct pairs only | Only pools and markets of the token against the network coin. A token traded only against another token (for example USDT) has no price ("no direct pair"); the kit does not chain prices. | |
+| Network coin in USD | **Auto** (default): the chain's own price oracle (delphioracle on WAX, EOS, Telos and XPR Network mainnets) when its newest value is younger than 1 hour; else Alcor's USD price. **Oracle Only** / **Alcor Only**. | `CoreUsdSource`, `OracleMaxAge` |
+
+**Times.** Every `WaxPrice` has `SourceTime`: when the price came to be (the pool's last swap, the market's last trade, the oracle's value; null when the source does not say) and `FetchedAt`: when the kit read it. A price fetched a second ago can come from a trade days ago: show `SourceTime` for small tokens.
+
+**What a price is not.** A shown price is the pool's current price or the last trade. It is not what a trade of some size would get: a big trade moves the price, and on small tokens the order books can be almost empty.
+
+**Missing values.** `Value` is null with `Missing` and `Reason`: no pool, no direct pair, empty pool, no trades, stale oracle, source off, not supported on this network, or request failed. A failed request is never shown as 0. Balances: one token that fails has its own `Error` and does not stop the others; a token that does not exist on this chain is an error, not 0. `GetBalanceValues` totals add up the priced tokens only and say how many were left out (`PricedCount`, `UnpricedCount`).
+
+**Testnets have no prices.** Sources are chosen by chain id. The built-in Alcor hosts and oracles are for the WAX, EOS, Telos and XPR Network mainnets, so a testnet answers "not supported on this network" instead of using mainnet prices. You can set a source for any chain id yourself: `WaxKit.MarketSettings.SetAlcorHost(chainId, "https://…/api")`, `SetOracle(chainId, "delphioracle", "pairname")`.
+
+**Rate limits.** Alcor limits requests per IP address. The kit keeps answers for 60 seconds (`CacheSeconds`), sends one request when several calls ask for the same thing at once, and on HTTP 429 waits and tries again (at most 3 requests and 10 seconds), then reports the failure. Call these when a screen opens, not every frame. `WaxKit.MarketSettings.AlcorEnabled = false` stops every Alcor call.
+
+**Cancelling.** Every call takes a `CancellationToken`. Cancelling stops the whole call with `OperationCanceledException`, also in the middle of a list of tokens.
+
+**More Alcor data** (`WaxKit.Alcor`): `GetPool(id)`, `GetCoinPools(contract, symbol)` (pools of a token with the network coin, with fee, reserves, 24 h / 7 d change), `GetMarket(contract, symbol)` (last trade price and time, best bid / ask, 24 h volume), `GetTrades`, and price history: `GetPoolCandles(poolId, WaxCandleInterval.Hour1, 24)`, `GetMarketCandles(contract, symbol, interval, count)`.
+
+**WAX Kit Manager.** **Prices and balances**: Alcor on/off, Alcor hosts per chain id, price source, USD source, oracle max age, cache seconds, and the Tracked Tokens list (contract, symbol, optional pool id), with checks for wrong input.
+
+## NFT images and videos
+
+Show an NFT's image, animated GIF or video in uGUI, from IPFS or https.
+
+**No code:** add a **Raw Image** to your Canvas, then **Add Component > Unity WAX Kit > WAX NFT Media**. Type an **Asset Id** (or a **Template Id**; the collection is optional and saves one lookup). It loads when the game starts.
+
+**From code** (for example a list of the player's NFTs):
+
+```csharp
+// One component per item: shows the image, animates GIFs, plays videos (muted by default).
+var media = item.GetComponent<WaxNftMedia>();
+await media.Show(asset.AssetId);
+if (media.Error != null) Debug.Log("Not shown: " + media.Error);   // other NFTs are not affected
+
+// Or by hand: the references, then a texture you own.
+WaxNftMediaInfo info = await WaxKit.NftMedia.GetAssetMedia("1099512345678");
+WaxNftImage image = await WaxKit.NftMedia.LoadImage(info.Image);     // IPFS hash, ipfs:// link or https URL
+rawImage.texture = image.Texture;                                    // image.Frames + image.Delays for animations
+// ... later, when it is no longer shown:
+image.Dispose();                                                      // frees the textures
+
+string videoUrl = await WaxKit.NftMedia.GetVideoUrl(info.Video);      // for your own VideoPlayer
+```
+
+**Animated or still.** `WaxKit.MediaSettings.Mode` (or the component's **Mode**): **Animated** plays GIFs and videos; **Static** shows one still image, and nothing animates, decodes more frames or plays sound. A video in Static mode shows its cover image (field `img`), else its first frame when `FirstFrameForVideo` is on (it downloads the start of the video), else the placeholder.
+
+**Which data fields.** Defaults: image `img`, video `video`, cover `img`. Change them for all NFTs (`MediaSettings.ImageField` …) or for one collection or schema: `WaxKit.MediaSettings.SetFields("mygame", "heroes", "image", "clip", "poster")`. The WAX Kit Manager has the same settings (**NFT media**).
+
+**What plays where.**
+
+| Format | Windows (x64) | Android | WebGL | Checked in builds (Unity 6000.4.5f1 and 2022.3.62f3; Android: Unity 6000.4.5f1 only) |
+|---|---|---|---|---|
+| PNG | yes | yes | yes | Windows Mono / IL2CPP, Android and WebGL (headless Chrome): checked. |
+| JPG | yes | yes | yes | Android: checked (640x360 JPEG from an https server). Windows and WebGL: Editor tests only (same Unity path as PNG). |
+| GIF, still and animated | yes | yes | yes | Windows, Android and WebGL: checked (24-frame NFT GIF, static mode = 1 frame). Decoder: identical output to Chrome and mgGif on 9 real NFT GIFs + samples. |
+| WebP, still and animated | yes (libwebp 1.6.0 shipped with the kit) | still: yes; animated: first frame only | yes (all frames where the browser has WebCodecs, else the first) | Windows (libwebp) and WebGL (Chrome, animated through WebCodecs): checked. Android: checked, the still image and the first frame of the animated one shown (animation is not supported on Android). |
+| MP4 (H.264) | yes (see the note) | yes | yes, if the server allows cross-origin reads | WebGL (both versions): checked, the tested Main-profile (level 4.0) NFT video played. Android: checked, the tested Main-profile (level 4.0) NFT video (1080x1080, through the kit) and a Baseline sample (640x360) played. Windows on 2022.3: the tested Main-profile (level 4.0) NFT video played. Windows on Unity 6: the tested Baseline (level 3.0) and Main (level 3.0) sample files played; the two tested Main-profile (level 4.0) NFT videos streamed from IPFS gateways showed only their first frame (in a later check, one of them played in one run and stopped again in the next). This was observed in Unity 6 on Windows also with a plain VideoPlayer, without the kit; cause not confirmed. |
+| WebM (VP8) | yes | yes | Chrome, Firefox, Edge | Android: checked, a 640x360 VP8 sample played through the kit's video URL. Windows: Editor only (not in builds). |
+| H.265, VP9 | not promised: depends on the device or browser | not promised: depends on the device | not promised: depends on the browser | Android: an H.265 (HEVC Main) and a VP9 sample (640x360 each) played on the tested device. |
+| SVG, HTML | never opened (they can run scripts) | never opened | never opened | Android: checked, both refused ("not a supported image or video file"). |
+
+Android checks: media check app on a Xiaomi 2506BPN68G, Android 16 (API 36), Unity 6000.4.5f1, 2026-11-06. Device-dependent video results (H.265, VP9) apply to this device, Android version and Unity version only.
+
+The kind of a file is read from its first bytes, never from its name or the server's header.
+
+**IPFS gateways.** An IPFS reference (a bare hash, `ipfs://…`, or a gateway link `https://host/ipfs/<hash>/path`) is tried on each gateway in order, with a timeout each; the hash and the path are kept. Any other https URL is loaded as it is, never rewritten; plain http is refused. The kit comes with two public gateways (`gateway.pinata.cloud`, `ipfs.filebase.io`). Public gateways are rate-limited and change (several well-known ones stopped serving files in 2026). You can start with the defaults; choose your own RPC, AtomicAssets or IPFS service when your traffic or uptime needs it. Your own gateways are tried first:
+
+```csharp
+WaxKit.MediaSettings.Gateways.Add("https://my-gateway.example");   // tried before the defaults
+```
+
+A dedicated gateway URL is public once the game ships: anyone can read it from the build. Never put an admin or API key of Pinata, Filebase or any other service into a game. A gateway only serves files; keeping them stored (pinning) is the collection's job.
+
+**Limits** (`WaxKit.MediaSettings`, also in the WAX Kit Manager). Over a limit, the item shows the placeholder with a clear error; nothing crashes.
+
+| Setting | Default | |
+|---|---|---|
+| `MaxDownloadBytes` | 32 MB | Stops as soon as the server's size or the received bytes pass it. On WebGL, a server that sends no size is checked after the download. Videos stream and are not limited by it. |
+| `MaxWidth`, `MaxHeight` | 4096 | Read from the file header before decoding |
+| `MaxFrames` | 500 | Frames of an animation |
+| `MaxDecodedBytes` | 128 MB | Width x height x 4 x frames of one image |
+| `MemoryCacheBytes` | 64 MB | Downloaded files in memory |
+| `DiskCacheBytes` | 256 MB | Downloaded files on disk (Windows, Android). WebGL keeps none (the browser's own cache still applies). |
+| `GatewayTimeoutSeconds` | 15 | Per gateway |
+| `VideoStartTimeoutSeconds` | 30 | A video in the `WaxNftMedia` component must start (prepared and its first frame shown) within this time, else the load fails |
+
+**Who owns the textures.** `LoadImage` returns a `WaxNftImage` you own: call `Dispose()` when it is no longer shown. The `WaxNftMedia` component frees its own textures and video when it loads another NFT or is destroyed. A file downloaded once stays in the caches, so showing it again does not download it again.
+
+**Video errors.** In the `WaxNftMedia` component a video counts as loaded (**On Loaded**) once it is prepared and its first frame is shown. A player error, before or after that, and a video that does not start within `VideoStartTimeoutSeconds` go to **On Failed** (with `Error` set and the placeholder shown), and the video player is released. A video that shows its first frame and freezes later is not detected.
+
+**Video on WebGL.** The browser plays the URL: the server must send `Access-Control-Allow-Origin` (both default gateways do). Browsers play muted videos by themselves; with `VideoAudio` on, sound may wait for the player's first click.
+
 ## Networks and endpoints
 
-`WaxNetwork.Mainnet` and `WaxNetwork.Testnet` come with lists of public endpoints. Every chain call tries the endpoints in order; a timeout, network error, 429 or 5xx moves on to the next one, and the one that worked is remembered.
+`WaxNetwork.Mainnet` and `WaxNetwork.Testnet` come with lists of public endpoints. You can start with the defaults; choose your own RPC, AtomicAssets or IPFS service when your traffic or uptime needs it. Every chain call tries the endpoints in order; a timeout, network error, 429, 5xx or an answer that is not JSON (for example a provider's error page) moves on to the next one, and the one that worked is remembered.
+
+Use `https://` endpoints. Plain `http://` answers can be read and changed by anyone on the network path (balances, table rows, NFTs), and WebGL builds and Android block them; the WAX Kit Manager Inspector warns about them.
 
 ```csharp
 // Your own RPC servers first (a new network object; the built-in one is unchanged)
@@ -399,7 +536,7 @@ A wallet's `Logout` must end quickly (it should only clear its own data): the ne
 **Wallets.** Every build has all four built-in wallets: **Anchor** (`"anchor"`), **My Cloud Wallet** (`"mycloudwallet"`), **WebAuth App** (`"webauth"`) and **WebAuth Web** (`"webauthweb"`). To offer fewer, untick them in the WAX Kit Manager's **Wallets** checkboxes (see [Setup without code](#setup-without-code)), or remove them in code with `WaxKit.UnregisterWallet(walletId)`; this works for wallets added with `RegisterWallet` too. A removed wallet is no longer in `WaxKit.Wallets`, and `WaxKit.Login` with it throws `WaxKitException` with `NotSupported`. `RegisterWallet` adds a wallet back:
 
 ```csharp
-var cloud = WaxKit.Wallets.First(w => w.Id == "mycloudwallet");
+var cloud = WaxKit.Wallets.First(w => w.Id == "mycloudwallet");   // needs using System.Linq;
 WaxKit.UnregisterWallet("mycloudwallet");    // later: WaxKit.RegisterWallet(cloud);
 ```
 
@@ -668,7 +805,9 @@ Open this repository in Unity Hub, open `Assets/WaxKitDemo/WaxKitDemo.unity` and
 - **Android Custom Tab bottom sheet** needs a browser with partial Custom Tabs (Chrome 107+); other browsers show the page full height.
 - **WebAuth on Android does not return to the game after Reject** (WebAuth's behavior); the game shows `Cancelled` when the player comes back.
 - The buoy relay (`https://cb.anchor.link`, run by Greymass) carries the Anchor and WebAuth App messages; it keeps one pending message per channel, which is all the wallet protocols need.
-- **Tested on real devices (2026-11-03):** networks WAX Mainnet, WAX Testnet, Jungle 4, XPR Testnet; wallets Anchor (desktop 1.4.0 and phone app), My Cloud Wallet (WAX Mainnet), WebAuth App, WebAuth Web (XPR Testnet); Unity Editor, Windows Mono and IL2CPP players, Android (Xiaomi, Android 16), WebGL in Chrome on Windows and Android, and in Chrome and Safari on iPhone 14 Pro Max.
+- **Unity 6 on Windows: two tested NFT videos stopped after the first frame.** Both are H.264 Main profile, level 4.0 (1080x1080 and 666x666), streamed from IPFS gateways; one of them played in one later run and stopped again in the next. The tested Baseline and Main level 3.0 sample files played. Both NFT videos played in Unity 2022.3 on Windows and on WebGL, and the 1080x1080 one also on Android. Seen also with a plain VideoPlayer, without the kit; cause not confirmed.
+- **Tested on real devices (2026-11-03, 0.3.0):** networks WAX Mainnet, WAX Testnet, Jungle 4, XPR Testnet; wallets Anchor (desktop 1.4.0 and phone app), My Cloud Wallet (WAX Mainnet), WebAuth App, WebAuth Web (XPR Testnet); Unity Editor, Windows Mono and IL2CPP players, Android (Xiaomi, Android 16), WebGL in Chrome on Windows and Android, and in Chrome and Safari on iPhone 14 Pro Max.
+- **Tested on real devices (2026-11-06, 0.4.0):** My Cloud Wallet (WAX Mainnet) and WebAuth Web (XPR Testnet) with the 0.4.0 local page on Windows Mono, Windows IL2CPP and Android: login, transaction on chain, back to the game after Cancel, logout. Anchor on Android: game closed during login, login approved, game reopened = logged in. Unity 6 demo builds, WAX Testnet + Anchor (login, small send, logout): Windows Mono, Android, WebGL (hosted on Netlify). NFT media check on Android, 14 of 14 checks passed (Xiaomi 2506BPN68G, Android 16, Unity 6000.4.5f1; see [NFT images and videos](#nft-images-and-videos)).
 - **Not tested yet:** other Antelope chains (Telos, Libre, FIO, EOS mainnet and others; supported in code), XPR mainnet, other browsers (Edge, Firefox, Samsung Internet...).
 
 These lists will be updated as more is tested.
@@ -691,17 +830,33 @@ See [CHANGELOG.md](Packages/com.unitywaxkit.core/CHANGELOG.md).
 
 The kit's automated tests run in the Editor: **Window > General > Test Runner > EditMode > Run All**.
 
+## Who does what
+
+| Area | The kit does automatically | You set and check | Depends on | Tested vs read |
+|---|---|---|---|---|
+| Login and signing | wallet flows, transaction checks, chain id checks, saved sessions | app name, which wallets to offer; an ownership check on your server only if a game server gives rights, items or rewards by account name | wallet apps and sites, Buoy relay, RPC | tested (automatic tests); real wallet approvals tested by hand |
+| Chain reads | endpoint failover, answer checks, timeouts | start with the defaults; your own RPC / AtomicAssets service when traffic or uptime needs it | RPC, AtomicAssets API | tested |
+| Prices and balances | source choice, cache, rate-limit retry, a reason instead of a guess | tracked tokens, pool ids, Alcor on or off | Alcor, delphioracle, RPC | tested (recorded and live read-only) |
+| NFT media | gateway failover, file kind check, limits, caches, texture cleanup in the component | gateways (defaults to start), field names, limits, `Dispose()` for images you load in code | IPFS gateways, AtomicAssets | see the support table |
+| Notices | adds the notices file to WebGL, Windows and Android builds; `WaxKit.ThirdPartyNotices` | show or ship them, with your other plugins' notices | – | checked in the release builds |
+
 ## Security
 
 - The kit never sees or stores account private keys.
 - It stores in PlayerPrefs, per chain id: the session (account, permission, wallet) and, for Anchor, the link-session request key. That is a temporary key that only lets the game send requests to that Anchor session. A pending login key is deleted when the login ends, and `Logout()` deletes the saved session. On WebGL, PlayerPrefs live in browser storage, readable by any script on the same page.
-- A restored session (`RestoreSession()`) only remembers the account on this device. It is not proof of ownership for a game server: a server that needs proof must verify a signed transaction or an identity proof itself.
+- **A login is not proof of ownership for a game server.** A login (Anchor, My Cloud Wallet, WebAuth) tells the game which account the player chose. My Cloud Wallet and WebAuth Web logins are the wallet's own claim, with no signature (as in their official plugins). Anchor and WebAuth App logins come with an identity proof that the kit checks inside the game, but a game server cannot see that check. A restored session (`RestoreSession()`) only remembers the account on this device.
+- A transaction signature protects only that transaction on the chain.
+- A server ownership check is needed only when a game server gives rights, items or rewards based on the account name: then the server checks ownership itself, for example a transaction the player signed, on the chain. It does not mean every game needs a server.
+- Plain `http://` RPC and AtomicAssets endpoints are accepted (the WAX Kit Manager warns) for local development nodes only; use `https://` for anything players reach.
+- WebP images on Windows are decoded by libwebp (version in `Runtime/Plugins/Windows/libwebp/VERSION.md`). Keep the kit updated: libwebp security fixes come as kit patch releases.
+- Answers from RPC, AtomicAssets and Alcor servers are not size-limited, so use servers you trust: a broken or hostile server could make the game use a lot of memory.
 - The kit checks every transaction a wallet returns before broadcasting it. My Cloud Wallet may only add a WAX fee transfer to `txfee.wam` and a RAM purchase for the player; Anchor may not change anything. The kit also checks the chain id of RPC answers and wallet callbacks.
+- On Windows and Android, My Cloud Wallet and WebAuth Web run through a small page the game serves on `127.0.0.1`. It listens only on this device, on a random port, with one new server per wallet request that stops a few seconds after the request ends. Every address contains a random one-time secret (128 bits); requests without it get "not found". It answers only three requests (the page, "still open?", the wallet's result), holds no keys (only the wallet address and the transaction to sign), and sends no CORS headers, so other websites cannot read it. A request body must state its length and may be at most 1 MB; anything else is refused before the game reserves memory for it. The first result ends the request, and the kit checks it like any wallet answer (signatures, changes, signer) before anything is broadcast.
 - Report security problems privately with the **Report a vulnerability** button on the repository's **Security** tab, not in public issues.
 
 ## License
 
-MIT. The kit ships BouncyCastle, adds AndroidX Browser to Android builds, and contains C# ports of parts of WharfKit, Greymass buoy, elliptic, hmac-drbg and qrcode-generator. **Games that ship the kit must include [`THIRD_PARTY_NOTICES.md`](Packages/com.unitywaxkit.core/THIRD_PARTY_NOTICES.md)**, for example on a licenses / credits screen or as a file next to the game.
+The kit's own code is MIT. It ships BouncyCastle and, on Windows, libwebp; adds AndroidX Browser to Android builds; and contains C# ports of parts of WharfKit, Greymass buoy, Proton (link, signing-request, web-sdk), elliptic, hmac-drbg and qrcode-generator. Those parts keep their own licenses (BSD-3-Clause, MIT, Apache-2.0); most WharfKit, Greymass and Proton licenses add: *"not designed, licensed or intended for use in the design, construction, operation or maintenance of any military facility"*. Those conditions come with every game that ships the kit. **Games that ship the kit must include [`THIRD_PARTY_NOTICES.md`](Packages/com.unitywaxkit.core/THIRD_PARTY_NOTICES.md)**, for example on a licenses / credits screen or as a file. The kit's build step adds `UnityWaxKit-THIRD_PARTY_NOTICES.txt` to WebGL (next to index.html), Windows (next to the .exe) and Android (APK assets) builds, and `WaxKit.ThirdPartyNotices` returns the text for a credits screen. The file covers only the kit, not your game's other plugins.
 
 Questions and bug reports: open an issue.
 

@@ -25,10 +25,10 @@ namespace UnityWaxKit.Platform
         WaxNativePopupFlow browserFlow;
         bool browserTookFocus;
 
-        /// <summary>The return link the game was started or resumed with (cold start after the wallet), or null.</summary>
-        internal static string LastReturnLink { get; private set; }
-
-        /// <summary>Connects to the Java plugin and listens for the return link.</summary>
+        /// <summary>
+        /// Connects to the Java plugin. The return link only brings the game back to the front: the kit never reads
+        /// anything from it (answers come over buoy or the local page), so a link sent by another app changes nothing.
+        /// </summary>
         public WaxAndroidPlatform()
         {
             activity = new AndroidJavaClass("com.unity3d.player.UnityPlayer").GetStatic<AndroidJavaObject>("currentActivity");
@@ -36,8 +36,6 @@ namespace UnityWaxKit.Platform
             // Written into the manifest by the kit's Android build step; the same rule as the Editor's default otherwise.
             scheme = plugin.CallStatic<string>("metaData", activity, "waxkit.scheme") ?? DefaultScheme(Application.identifier);
 
-            Application.deepLinkActivated += OnDeepLink;
-            if (!string.IsNullOrEmpty(Application.absoluteURL)) OnDeepLink(Application.absoluteURL);
             Application.focusChanged += OnFocusChanged;
             WaxAppEvents.Ensure();
         }
@@ -130,11 +128,6 @@ namespace UnityWaxKit.Platform
             await Task.Yield();
             await Delay(1500, default);
             if (!flow.IsFinished) flow.Finish(null);
-        }
-
-        static void OnDeepLink(string url)
-        {
-            if (url.IndexOf("://" + ReturnHost, StringComparison.OrdinalIgnoreCase) >= 0) LastReturnLink = url;
         }
     }
 }

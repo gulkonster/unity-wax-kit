@@ -3,6 +3,35 @@
 All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-06
+
+### Changed
+- THIRD_PARTY_NOTICES: added @proton/web-sdk 5.1.0 (MIT, ported for WebAuth Web) and libwebp 1.6.0; AndroidX Browser's own AndroidX dependencies named; @wharfkit/signing-request and @proton/signing-request labelled "MIT with a military-facility clause"; BouncyCastle file hash recorded. README and LICENSE say which parts are MIT and which keep their own licenses.
+- Unity 2022.3 or newer (was Unity 6.0): checked with Unity 2022.3.62f3 and Unity 6000.4.5f1.
+- Dependencies: `com.unity.ugui` `1.0.0` and `com.unity.textmeshpro` `3.0.7`, so the package resolves in Unity 2022.3 (Unity 6 uses its own ugui 2.0.0, which includes TextMeshPro).
+- WAX Kit Manager Inspector: the warning for an endpoint that is not `https://` now also says why (plain http answers can be read and changed on the way).
+- README: how to get a WAX testnet account for Anchor (Quick start), `https://` endpoints note in Networks and endpoints, the `Network` error row covers endpoints answering error pages, and the examples that use `First()` say they need `using System.Linq;`. All README examples were compiled in Unity 2022.3.
+- Waiting a frame and waiting for a web request no longer use `Awaitable` (Unity 2023.1+); the WebGL plugin no longer uses `stringToNewUTF8`; the wallet UI's word wrap uses the TextMeshPro 3.0 property in Unity 2022.3.
+
+### Added
+- `WaxKit.AtomicAssets.GetLowestListing(templateId)` and `GetLastSale(templateId)`: the cheapest current listing and the latest sale of a template, in the network's `CoreSymbol` when it is set.
+- README: why the local `127.0.0.1` page used for My Cloud Wallet and WebAuth Web on Windows and Android is safe.
+- Prices and token balances. `WaxKit.Alcor` (read-only Alcor Exchange data): `GetPrice` (a token's price in the network coin from the Alcor pool with the largest network-coin reserve, a pool id you set, or the spot market's last trade; direct pairs only), `GetPool`, `GetCoinPools`, `GetPairPools`, `GetMarket`, `GetTrades`, `GetPoolCandles`, `GetMarketCandles`. `WaxKit.GetCoreUsdPrice` (the chain's delphioracle when fresh, else Alcor), `WaxKit.GetBalance`, `GetBalances`, `GetTrackedBalances` and `GetBalanceValues` (value in the network coin and USD, totals of the priced tokens only). Every price carries its source, `SourceTime` and `FetchedAt`; a missing price is null with a reason, never 0. Sources are chosen by chain id (WAX, EOS, Telos and XPR Network mainnets built in; testnets have none). Answers are cached (60 s), shared while in flight, and HTTP 429 is retried (at most 3 requests, 10 s). Settings in `WaxKit.MarketSettings` and the WAX Kit Manager (**Prices and balances**, with Tracked Tokens).
+- NFT images and videos. `WaxNftMedia` component (uGUI Raw Image; asset id, or template id with optional collection) and `WaxKit.NftMedia` (`GetAssetMedia`, `GetTemplateMedia`, `LoadImage`, `GetVideoUrl`, `ClearCache`). PNG and JPG through Unity, GIF (still and animated) through the kit's own decoder, WebP through the browser (WebGL; every frame where the browser has WebCodecs, else the first), Android (first frame) and the shipped libwebp on Windows x64 (see below). MP4 (H.264) and WebM (VP8) through Unity's VideoPlayer. Animated or Static mode (static: one still image, a video's cover image, nothing plays). IPFS gateways tried in order (your own first, then `gateway.pinata.cloud` and `ipfs.filebase.io`); other https URLs are never rewritten; http is refused. The kind is read from the first bytes; SVG and HTML are never opened. Limits for download size, pixels, frames and decoded memory, a memory cache and a disk cache (Windows, Android). Data field names (`img`, `video`, cover `img`) can be changed globally and per collection / schema. Settings in `WaxKit.MediaSettings` and the WAX Kit Manager (**NFT media**). In the component a video counts as loaded once it is prepared and its first frame is shown; player errors (also after the start) and a video that does not start within `VideoStartTimeoutSeconds` (default 30) go to **On Failed**.
+- The package now lists Unity's built-in Image Conversion and Video modules as dependencies (used by NFT media).
+- WebP NFT images (still and animated) on Windows x64 through **libwebp 1.6.0**, shipped with the kit (`Runtime/Plugins/Windows/libwebp`, built from the official release with the static C runtime; versions, hashes and the exact build command in `VERSION.md`). libwebp security fixes come as kit patch releases.
+- `WaxKit.ThirdPartyNotices` (the kit's notices as text, for a credits screen), and a build step that adds `UnityWaxKit-THIRD_PARTY_NOTICES.txt` to WebGL, Windows and Android builds.
+
+### Security
+- The local `127.0.0.1` page (My Cloud Wallet and WebAuth Web on Windows and Android) accepts request bodies only with a Content-Length of at most 1 MB. Larger, chunked or length-less bodies are refused before any memory is reserved, so another program on the device can no longer make the game allocate up to 2 GB.
+- The local page also checks its secret address right after the request line and headers (a wrong address is answered "not found" without reading anything more), serves at most 16 connections at a time, closes any connection after 15 seconds, and no longer returns error details to the caller.
+- My Cloud Wallet: a modified transaction that adds or changes transaction extensions is refused, like any other change the game did not ask for.
+- Anchor login: the identity proof must be for the scope the game's own login request carried (the game's app name); a proof made for another app name is refused ("The login proof is for another app …"). The scope does not tell two logins of the same app apart.
+
+### Fixed
+- An RPC or AtomicAssets endpoint that answers 200 with something that is not one complete JSON object or array (a provider's HTML page, a cut-off answer, an empty body) now counts as a failed endpoint: the kit tries the next one and, when none works, throws a `WaxKitException` (`Network`) instead of a JSON parser exception. The kit's own calls also refuse an answer of the wrong shape the same way (for example `[]` where `get_account` answers an object, or an AtomicAssets answer without `"success": true` and `data`); `WaxAtomicAssets.GetJson` keeps accepting any JSON object or array.
+- `WaxKit.GetTableRows<JObject>`: `time_point` and other date-like fields in JObject rows are now the chain's exact text (for example `"2026-11-04T05:06:07.500"`). Before, they became dates and read back in the device's date format, without milliseconds. Typed `DateTime` fields still read them.
+
 ## [0.3.0] - 2026-11-03
 
 ### Changed

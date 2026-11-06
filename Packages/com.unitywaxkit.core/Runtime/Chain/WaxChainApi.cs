@@ -16,13 +16,14 @@ namespace UnityWaxKit.Chain
         static readonly Dictionary<string, Task<Abi>> AbiCache = new Dictionary<string, Task<Abi>>();
 
         /// <summary>/v1/chain/get_table_rows: the raw JSON answer.</summary>
-        public static Task<string> GetTableRows(WaxNetwork network, string queryJson) => PostText(network, "/v1/chain/get_table_rows", queryJson);
+        public static Task<string> GetTableRows(WaxNetwork network, string queryJson) =>
+            PostText(network, "/v1/chain/get_table_rows", queryJson, WaxAnswerShape.Object);
 
         /// <summary>/v1/chain/get_info: head block, chain id and time. Throws WrongChain when the endpoint is on another chain.</summary>
         public static async Task<JObject> GetInfo(WaxNetwork network, CancellationToken cancellation = default)
         {
             const string path = "/v1/chain/get_info";
-            var response = await network.Rpc.Send("POST", path, "{}", cancellation, IsNodeosError);
+            var response = await network.Rpc.Send("POST", path, "{}", cancellation, IsNodeosError, WaxAnswerShape.Object);
             if (!response.IsSuccess) throw new WaxKitException(WaxErrorKind.Network, $"{path}: {NodeosError(response).message}");
 
             var info = WaxJson.Parse(response.Text);
@@ -33,7 +34,8 @@ namespace UnityWaxKit.Chain
 
         /// <summary>/v1/chain/get_account: permissions and keys of an account.</summary>
         public static async Task<JObject> GetAccount(WaxNetwork network, string account, CancellationToken cancellation = default) =>
-            WaxJson.Parse(await PostText(network, "/v1/chain/get_account", new JObject { ["account_name"] = account }.ToString(), cancellation));
+            WaxJson.Parse(await PostText(network, "/v1/chain/get_account", new JObject { ["account_name"] = account }.ToString(),
+                WaxAnswerShape.Object, cancellation));
 
         /// <summary>A contract's ABI (fetched once per network and contract, then cached).</summary>
         public static Task<Abi> GetAbi(WaxNetwork network, string account)
@@ -50,7 +52,8 @@ namespace UnityWaxKit.Chain
 
         static async Task<Abi> FetchAbi(WaxNetwork network, string account)
         {
-            var json = WaxJson.Parse(await PostText(network, "/v1/chain/get_abi", new JObject { ["account_name"] = account }.ToString()));
+            var json = WaxJson.Parse(await PostText(network, "/v1/chain/get_abi", new JObject { ["account_name"] = account }.ToString(),
+                WaxAnswerShape.Object));
             if (!(json["abi"] is JObject abi)) throw new WaxKitException(WaxErrorKind.Wallet, $"Account '{account}' has no contract ABI.");
             return Abi.FromJson(abi);
         }
@@ -120,7 +123,7 @@ namespace UnityWaxKit.Chain
                 ["packed_trx"] = Hex.Encode(packed),
             }.ToString();
 
-            var response = await network.Rpc.Send("POST", "/v1/chain/send_transaction", body, cancellation, IsNodeosError);
+            var response = await network.Rpc.Send("POST", "/v1/chain/send_transaction", body, cancellation, IsNodeosError, WaxAnswerShape.Object);
             if (response.IsSuccess) return (string)WaxJson.Parse(response.Text)["transaction_id"] ?? id;
 
             var error = NodeosError(response);
@@ -138,7 +141,7 @@ namespace UnityWaxKit.Chain
         public static async Task<bool> KeysSatisfy(WaxNetwork network, JObject transaction, IEnumerable<string> keys, CancellationToken cancellation = default)
         {
             var body = new JObject { ["transaction"] = transaction, ["available_keys"] = new JArray(keys.ToArray()) }.ToString();
-            var response = await network.Rpc.Send("POST", "/v1/chain/get_required_keys", body, cancellation, IsNodeosError);
+            var response = await network.Rpc.Send("POST", "/v1/chain/get_required_keys", body, cancellation, IsNodeosError, WaxAnswerShape.Object);
             if (response.IsSuccess) return true;
             var error = NodeosError(response);
             // unsatisfied_authorization: the keys do not cover an authorization.
@@ -152,7 +155,7 @@ namespace UnityWaxKit.Chain
             try
             {
                 var body = new JObject { ["keys"] = new JArray(keys.ToArray()) }.ToString();
-                var response = await network.Rpc.Send("POST", "/v1/chain/get_accounts_by_authorizers", body, cancellation, IsNodeosError);
+                var response = await network.Rpc.Send("POST", "/v1/chain/get_accounts_by_authorizers", body, cancellation, IsNodeosError, WaxAnswerShape.Object);
                 if (!response.IsSuccess) return new List<string>();
                 return ((WaxJson.Parse(response.Text)["accounts"] as JArray) ?? new JArray())
                     .Select(a => (string)a["account_name"]).Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
@@ -183,14 +186,20 @@ namespace UnityWaxKit.Chain
         }
 
         /// <summary>POSTs to a chain API path through the endpoint list (failover) and returns the answer text.</summary>
-        public static async Task<string> PostText(WaxNetwork network, string path, string body, CancellationToken cancellation = default)
+        public static Task<string> PostText(WaxNetwork network, string path, string body, CancellationToken cancellation = default) =>
+            PostText(network, path, body, WaxAnswerShape.Any, cancellation);
+
+        /// <summary>As <see cref="PostText(WaxNetwork, string, string, CancellationToken)"/>; a 2xx answer that is not
+        /// <paramref name="shape"/> counts as a failed endpoint.</summary>
+        internal static async Task<string> PostText(WaxNetwork network, string path, string body, WaxAnswerShape shape,
+            CancellationToken cancellation = default)
         {
-            var response = await network.Rpc.Send("POST", path, body, cancellation, IsNodeosError);
+            var response = await network.Rpc.Send("POST", path, body, cancellation, IsNodeosError, shape);
             if (response.IsSuccess) return response.Text;
             throw new WaxKitException(WaxErrorKind.Network, $"{path}: {NodeosError(response).message}");
         }
 
-        static bool IsNodeosError(WaxHttpResponse response)
+        internal static bool IsNodeosError(WaxHttpResponse response)
         {
             try
             {
@@ -202,7 +211,7 @@ namespace UnityWaxKit.Chain
             }
         }
 
-        static (string name, string message) NodeosError(WaxHttpResponse response)
+        internal static (string name, string message) NodeosError(WaxHttpResponse response)
         {
             try
             {

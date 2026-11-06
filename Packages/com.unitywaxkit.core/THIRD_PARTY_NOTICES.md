@@ -1,13 +1,21 @@
 # Third-party notices
 
 Unity WAX Kit ships or uses the components below, and its C# code contains logic ported from the listed JavaScript packages.
-Games that ship Unity WAX Kit must include this file (for example on a licenses / credits screen or as a file).
+The kit's own code is MIT (see LICENSE.md); the components and ported parts below keep their own licenses. Most of the
+WharfKit, Greymass and Proton licenses below add: "You acknowledge that this software is not designed, licensed or intended
+for use in the design, construction, operation or maintenance of any military facility." Those conditions come with every
+game that ships the kit.
+
+Games that ship Unity WAX Kit must include this file (for example on a licenses / credits screen or as a file). The kit's
+build step puts a copy into every WebGL, Windows and Android build, and `WaxKit.ThirdPartyNotices` returns its text for a
+credits screen. This file covers only Unity WAX Kit, not the game's other plugins.
 
 ## BouncyCastle.Cryptography 2.6.2
 
 License: MIT
 
 Shipped as `Runtime/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll` (hashes, secp256k1, AES, deflate).
+File version 2.6.2.46322 (2.6.2+b4f2f6ad76), SHA-256 `7419a1723e300f6b772bf8153138f92da1bc47fc7d7fe096bdfacdff88d6751f` (a record of the shipped file).
 
 ```
 Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org).
@@ -29,7 +37,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 License: Apache-2.0
 
-Added to Android builds from Google's Maven repository by the kit's build step (Custom Tabs).
+Added to Android builds from Google's Maven repository by the kit's build step (Custom Tabs). Gradle also adds the AndroidX
+libraries it depends on (for example androidx.core, androidx.annotation, androidx.collection, androidx.concurrent-futures,
+androidx.interpolator and Guava's listenablefuture); they are under the same Apache License 2.0 below.
 
 ```
 Copyright The Android Open Source Project
@@ -308,7 +318,7 @@ IN THE DESIGN, CONSTRUCTION, OPERATION OR MAINTENANCE OF ANY MILITARY FACILITY.
 
 ## @wharfkit/signing-request 3.4.0
 
-License: MIT
+License: MIT (as published), with a military-facility clause in its license text
 
 Logic ported to C#: EOSIO signing requests (ESR) and identity proofs.
 
@@ -571,7 +581,7 @@ IN THE DESIGN, CONSTRUCTION, OPERATION OR MAINTENANCE OF ANY MILITARY FACILITY.
 
 ## @proton/signing-request 5.1.0
 
-License: MIT
+License: MIT (as published), with a military-facility clause in its license text
 
 Matched in C#: ESR v2 request layout for WebAuth (version 2 only, identity without scope, full chain id, v2 identity proofs).
 
@@ -602,6 +612,36 @@ OTHER DEALINGS IN THE SOFTWARE.
 YOU ACKNOWLEDGE THAT THIS SOFTWARE IS NOT DESIGNED, LICENSED OR
 INTENDED FOR USE IN THE DESIGN, CONSTRUCTION, OPERATION OR
 MAINTENANCE OF ANY MILITARY FACILITY.
+```
+
+## @proton/web-sdk 5.1.0
+
+License: MIT
+
+Logic ported to C#: WebAuth Web wallet (the protonWeb link: login and signing popup messages).
+
+```
+MIT License
+
+Copyright (c) 2020-2023 Metallicus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ## @greymass/buoy 1.0.4
@@ -732,4 +772,76 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## libwebp 1.6.0 (Windows x64)
+
+License: BSD-3-Clause, with the WebM project's additional patent grant (PATENTS below)
+
+Shipped as `Runtime/Plugins/Windows/libwebp/x86_64/libwebp.dll`, `libwebpdemux.dll` and `libsharpyuv.dll` (WebP images on Windows), built from the official
+release archive (SHA-256 `e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564`, release signature checked).
+Shipped files (SHA-256, a record): libwebp.dll `9A585DB747C6A1CA820123FFACC43578E8BF8EAD84CB96BF7F33C88AB7F3BBE9`,
+libwebpdemux.dll `6FB2E97E02F3EEFB830039A343AE6085266E9FDCE991431F6521A625E496D06B`,
+libsharpyuv.dll `9608F3B8903A122AA6EC60FEAA2E8D8F4B1AC2E69FD0670804D4E27EE63F4310`.
+Compiler, flags and the exact build command: `Runtime/Plugins/Windows/libwebp/VERSION.md`.
+
+```
+Copyright (c) 2010, Google Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+```
+
+PATENTS:
+
+```
+Additional IP Rights Grant (Patents)
+------------------------------------
+
+"These implementations" means the copyrightable works that implement the WebM
+codecs distributed by Google as part of the WebM Project.
+
+Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable (except as stated in this section) patent license to
+make, have made, use, offer to sell, sell, import, transfer, and otherwise
+run, modify and propagate the contents of these implementations of WebM, where
+such license applies only to those patent claims, both currently owned by
+Google and acquired in the future, licensable by Google that are necessarily
+infringed by these implementations of WebM. This grant does not include claims
+that would be infringed only as a consequence of further modification of these
+implementations. If you or your agent or exclusive licensee institute or order
+or agree to the institution of patent litigation or any other patent
+enforcement activity against any entity (including a cross-claim or
+counterclaim in a lawsuit) alleging that any of these implementations of WebM
+or any code incorporated within any of these implementations of WebM
+constitute direct or contributory patent infringement, or inducement of
+patent infringement, then any patent rights granted to you under this License
+for these implementations of WebM shall terminate as of the date such
+litigation is filed.
 ```

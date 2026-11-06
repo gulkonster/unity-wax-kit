@@ -66,7 +66,12 @@ namespace UnityWaxKit.Platform
 
             using (cancellation.Register(request.Abort))
             {
-                await request.SendWebRequest();
+                // Not "await request.SendWebRequest()": awaiting an AsyncOperation needs Unity 2023.1+.
+                var operation = request.SendWebRequest();
+                var done = new TaskCompletionSource<bool>();
+                operation.completed += _ => done.TrySetResult(true);
+                if (operation.isDone) done.TrySetResult(true);
+                await done.Task;
             }
             cancellation.ThrowIfCancellationRequested();
 
@@ -88,7 +93,19 @@ namespace UnityWaxKit.Platform
         public async Task Delay(int milliseconds, CancellationToken cancellation)
         {
             var end = DateTime.UtcNow.AddMilliseconds(milliseconds);
-            while (DateTime.UtcNow < end) await Awaitable.NextFrameAsync(cancellation);
+            while (DateTime.UtcNow < end) await NextFrame(cancellation);
+        }
+
+        /// <summary>
+        /// Waits one frame (Unity 2022.3 and newer). On the main thread, Unity runs a continuation posted to its
+        /// synchronization context on the next player-loop update; off the main thread it waits about one frame.
+        /// </summary>
+        static async Task NextFrame(CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (SynchronizationContext.Current != null) await Task.Yield();
+            else await Task.Delay(16, cancellation);
+            cancellation.ThrowIfCancellationRequested();
         }
 
         /// <summary>Reads a saved value (PlayerPrefs), or null.</summary>

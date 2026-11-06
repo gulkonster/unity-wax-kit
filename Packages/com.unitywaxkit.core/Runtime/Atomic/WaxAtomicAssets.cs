@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityWaxKit.Antelope;
+using UnityWaxKit.Chain;
 using Newtonsoft.Json.Linq;
 
 namespace UnityWaxKit
@@ -106,6 +107,31 @@ namespace UnityWaxKit
         public Task<List<WaxAtomicSale>> GetListings(WaxAtomicQuery query) =>
             GetList<WaxAtomicSale>("/atomicmarket/v2/sales", Copy(query).Set("state", "1"));
 
+        /// <summary>
+        /// The cheapest current listing of a template (sales in state 1, lowest price first), or null when none.
+        /// When the network's <see cref="WaxNetwork.CoreSymbol"/> is set, only sales paid in it count, and
+        /// <see cref="WaxAtomicSale.Price"/> is the price in it. <see cref="WaxAtomicSale.ListingPrice"/> can be in another
+        /// symbol (a listing priced in USD and paid in WAX).
+        /// </summary>
+        public Task<WaxAtomicSale> GetLowestListing(string templateId) => FirstSale(templateId, "1", "price", "asc");
+
+        /// <summary>
+        /// The latest sold sale of a template (sales in state 3, most recently updated first), or null when none.
+        /// When the network's <see cref="WaxNetwork.CoreSymbol"/> is set, only sales paid in it count, and
+        /// <see cref="WaxAtomicSale.Price"/> is what the buyer paid in it.
+        /// </summary>
+        public Task<WaxAtomicSale> GetLastSale(string templateId) => FirstSale(templateId, "3", "updated", "desc");
+
+        async Task<WaxAtomicSale> FirstSale(string templateId, string state, string sort, string order)
+        {
+            if (string.IsNullOrEmpty(templateId)) throw new ArgumentException("A template id is required.", nameof(templateId));
+            var query = new WaxAtomicQuery { TemplateId = templateId, Sort = sort, Order = order, Limit = 1 }
+                .Set("state", state)
+                .Set("symbol", string.IsNullOrEmpty(network.CoreSymbol) ? null : network.CoreSymbol);
+            var sales = await GetSales(query);
+            return sales.Count > 0 ? sales[0] : null;
+        }
+
         /// <summary>Price statistics per template (median, average, min, max, sales).</summary>
         public Task<List<WaxAtomicTemplatePrice>> GetTemplatePrices(WaxAtomicQuery query) =>
             GetList<WaxAtomicTemplatePrice>("/atomicmarket/v1/prices/templates", query);
@@ -116,17 +142,25 @@ namespace UnityWaxKit
         /// GET any AtomicAssets / AtomicMarket path (for example "/atomicmarket/v1/auctions") and returns the response JSON
         /// ({ success, data, query_time }).
         /// </summary>
-        public async Task<string> GetJson(string path, WaxAtomicQuery query = null)
+        public Task<string> GetJson(string path, WaxAtomicQuery query = null) => GetJson(path, query, WaxAnswerShape.Any);
+
+        /// <summary>
+        /// As <see cref="GetJson(string, WaxAtomicQuery)"/>; a 2xx answer that is not <paramref name="shape"/> counts as a
+        /// failed endpoint (the kit's own calls ask for the API's envelope: success true and a data field).
+        /// </summary>
+        internal async Task<string> GetJson(string path, WaxAtomicQuery query, WaxAnswerShape shape)
         {
             if (string.IsNullOrEmpty(path) || path[0] != '/') throw new ArgumentException("Path must start with '/'.", nameof(path));
-            var response = await network.Atomic.Send("GET", path + (query?.ToQueryString() ?? ""), null);
+            var response = await network.Atomic.Send("GET", path + (query?.ToQueryString() ?? ""), null, shape: shape);
             if (response.IsSuccess) return response.Text;
             throw new WaxKitException(WaxErrorKind.Network, $"AtomicAssets {path}: HTTP {response.Status} {Message(response.Text)}");
         }
 
-        async Task<List<T>> GetList<T>(string path, WaxAtomicQuery query) => Data(await GetJson(path, query)).ToObject<List<T>>();
+        async Task<List<T>> GetList<T>(string path, WaxAtomicQuery query) =>
+            Data(await GetJson(path, query, WaxAnswerShape.AtomicEnvelope)).ToObject<List<T>>();
 
-        async Task<T> GetOne<T>(string path, WaxAtomicQuery query = null) => Data(await GetJson(path, query)).ToObject<T>();
+        async Task<T> GetOne<T>(string path, WaxAtomicQuery query = null) =>
+            Data(await GetJson(path, query, WaxAnswerShape.AtomicEnvelope)).ToObject<T>();
 
         static JToken Data(string json)
         {

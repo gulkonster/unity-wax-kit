@@ -127,6 +127,30 @@ namespace UnityWaxKit.Tests
             AssertRejected(Transaction(GameAction()), Normalize(modified));
         }
 
+        // Allowed on purpose (as the official plugin): My Cloud Wallet may set its own expiration, reference block and
+        // resource limits. The chain enforces them (expiration at most one hour ahead, TaPoS must match a recent block);
+        // actions, authorizations, delay, context-free actions and extensions are checked above.
+        [Test]
+        public void ChangedHeader_IsAccepted()
+        {
+            var modified = Transaction(GameAction());
+            modified["expiration"] = "2030-01-01T00:00:00";
+            modified["ref_block_num"] = 999;
+            modified["ref_block_prefix"] = 123456789;
+            modified["max_net_usage_words"] = 99;
+            modified["max_cpu_usage_ms"] = 99;
+            Validate(Transaction(GameAction()), Normalize(modified));
+        }
+
+        [Test]
+        public void AddedTransactionExtension_IsRejected()
+        {
+            var modified = Transaction(GameAction());
+            // Extension 1 (resource payer) with any data: the game's transaction has none.
+            modified["transaction_extensions"] = new JArray(new JObject { ["type"] = 1, ["data"] = "0011" });
+            AssertRejected(Transaction(GameAction()), Normalize(modified));
+        }
+
         // ---- ToBytes ----
 
         [Test]

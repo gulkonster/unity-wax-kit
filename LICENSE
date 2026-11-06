@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+This license covers the Unity WAX Kit's own code. Third-party components and the code ported from other projects keep their own
+licenses and conditions (BSD-3-Clause, MIT, Apache-2.0; several with a military-facility clause): see
+Packages/com.unitywaxkit.core/THIRD_PARTY_NOTICES.md.

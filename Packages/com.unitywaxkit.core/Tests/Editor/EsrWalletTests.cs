@@ -69,6 +69,58 @@ namespace UnityWaxKit.Tests
             Assert.AreEqual(WaxErrorKind.WrongChain, error.Kind);
         }
 
+        // Night shift round 2: every field of the transaction an ESR wallet echoes back must be the kit's own. Any change
+        // is refused (the kit sends its own bytes, so a wallet cannot get anything else broadcast).
+        static readonly (string name, Action<JObject> change)[] Changes =
+        {
+            ("expiration", t => t["expiration"] = "2030-01-01T00:00:00"),
+            ("ref_block_num", t => t["ref_block_num"] = 999),
+            ("ref_block_prefix", t => t["ref_block_prefix"] = 123456789),
+            ("max_net_usage_words", t => t["max_net_usage_words"] = 99),
+            ("max_cpu_usage_ms", t => t["max_cpu_usage_ms"] = 99),
+            ("delay_sec", t => t["delay_sec"] = 60),
+            ("action account", t => t["actions"][0]["account"] = "othergame"),
+            ("action name", t => t["actions"][0]["name"] = "burn"),
+            ("action data", t => t["actions"][0]["data"] = "02"),
+            ("authorization actor", t => t["actions"][0]["authorization"][0]["actor"] = "attacker1111"),
+            ("authorization permission", t => t["actions"][0]["authorization"][0]["permission"] = "owner"),
+            ("added authorization", t => ((JArray)t["actions"][0]["authorization"]).Add(new JObject { ["actor"] = "cosign.wam", ["permission"] = "paybw" })),
+            ("added action", t => ((JArray)t["actions"]).Add(Fee())),
+            ("context-free action", t => ((JArray)t["context_free_actions"]).Add(Action("mygame", "note", "", "cosign.wam", "paybw"))),
+            ("transaction extension", t => t["transaction_extensions"] = new JArray(new JObject { ["type"] = 1, ["data"] = "0011" })),
+        };
+
+        static System.Collections.Generic.IEnumerable<TestCaseData> ChangedFields()
+        {
+            foreach (var (name, change) in Changes) yield return new TestCaseData(change).SetName("ChangedField_IsRejected(" + name + ")");
+        }
+
+        [TestCaseSource(nameof(ChangedFields))]
+        public void ChangedField_IsRejected(Action<JObject> change)
+        {
+            var signed = Transaction(GameAction());
+            change(signed);
+            var payload = Callback(Normalize(signed));
+            var error = Assert.Throws<WaxKitException>(() => new TestWallet().ToSignResult(Request(Transaction(GameAction())), payload));
+            Assert.AreEqual(WaxErrorKind.Wallet, error.Kind);
+        }
+
+        [Test]
+        public void TaPoSFieldsInTheCallback_AreIgnoredForAFullTransaction()
+        {
+            // The kit's request carries its own expiration and reference block, so ex / rbn / rid of the callback cannot
+            // change what is broadcast: the kit sends its own bytes.
+            var transaction = Transaction(GameAction());
+            var payload = Callback(transaction);
+            payload["ex"] = "2030-01-01T00:00:00";
+            payload["rbn"] = "999";
+            payload["rid"] = "123456789";
+            payload["sa"] = "attacker1111";
+            payload["sp"] = "owner";
+            var result = new TestWallet().ToSignResult(Request(transaction), payload);
+            Assert.IsNull(result.SerializedTransaction);
+        }
+
         [Test]
         public void UnreadableRequest_IsRejected()
         {
